@@ -37,7 +37,6 @@
 #include <bt/peerwire/choketask.hh>
 #include <bt/peerwire/downloadtask.hh>
 #include <bt/peerwire/uploadtask.hh>
-#include <bt/bundle/savestatetask.hh>
 
 #include <delegate/delegate.hh>
 
@@ -167,7 +166,6 @@ bool GlobalTorrentRegistry::startTorrent(TorrentBundle *bundle)
 
         AnnounceScheduler *announceScheduler = new AnnounceScheduler(*bundle, *reactor);
         ConnectionInitiator *connectionInitiator = new ConnectionInitiator(*bundle, *reactor);
-        SaveStateTask *saveStateTask = new SaveStateTask(*bundle);
         ChokeTask *chokeTask = new ChokeTask(*bundle);
         DownloadTask *downloadTask = new DownloadTask(*bundle);
         UploadTask *uploadTask = new UploadTask(*bundle, defaultIoThread_);
@@ -188,7 +186,6 @@ bool GlobalTorrentRegistry::startTorrent(TorrentBundle *bundle)
         reactor->scheduleTask(connectionInitiator, 10 * 1000);
         reactor->scheduleTask(chokeTask, 60 * 1000);
         reactor->scheduleTask(uploadTask, 150);
-        reactor->scheduleTask(saveStateTask, 120 * 1000);
 
         torrent.commandTask = commandTask;
 
