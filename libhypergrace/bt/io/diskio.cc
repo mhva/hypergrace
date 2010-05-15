@@ -47,15 +47,15 @@ using namespace Hypergrace::Bt;
 class DiskIo::Private
 {
 public:
-    struct WriteRequest {
-        WriteRequest() {}
+    struct WriteBlocksRequest {
+        WriteBlocksRequest() {}
 
-        WriteRequest(WriteRequest &&other)
+        WriteBlocksRequest(WriteBlocksRequest &&other)
         {
             *this = std::move(other);
         }
 
-        void operator =(WriteRequest &&other)
+        void operator =(WriteBlocksRequest &&other)
         {
             if (this == &other)
                 return;
@@ -68,6 +68,14 @@ public:
 
         const TorrentBundle *bundle;
         DiskIo::WriteList writeList;
+        DiskIo::WriteSuccessDelegate onWriteSuccess;
+        DiskIo::WriteFailureDelegate onWriteFailure;
+    };
+
+    struct WriteDataRequest {
+        std::string filename;
+        unsigned long long offset;
+        std::string data;
         DiskIo::WriteSuccessDelegate onWriteSuccess;
         DiskIo::WriteFailureDelegate onWriteFailure;
     };
@@ -256,7 +264,7 @@ private:
         return location;
     }
 
-    void satisfyRequest(const WriteRequest &request)
+    void satisfyRequest(const WriteBlocksRequest &request)
     {
         unsigned int pieceSize = request.bundle->model().pieceSize();
         const std::string &path = request.bundle->configuration().storageDirectory();
@@ -305,6 +313,18 @@ private:
         }
 
         request.onWriteSuccess();
+    }
+
+    void satisfyRequest(const WriteDataRequest &request)
+    {
+        ssize_t wrote = write(request.filename, request.offset, request.data.data(),
+                request.data.size());
+
+        if (wrote >= 0 && (size_t)wrote == request.data.size()) {
+            request.onWriteSuccess();
+        } else {
+            request.onWriteFailure();
+        }
     }
 
     void satisfyRequest(const ReadRequest &request)
@@ -543,7 +563,8 @@ private:
     void ioLoop()
     {
         while (!stop_) {
-            std::deque<WriteRequest> toWrite;
+            std::deque<WriteBlocksRequest> blocksToWrite;
+            std::deque<WriteDataRequest> dataToWrite;
             std::deque<ReadRequest> toRead;
             std::deque<VerifyRequest> toVerify;
 
@@ -553,9 +574,14 @@ private:
                 // lists instead.
                 std::lock_guard<std::mutex> l(anchor_);
 
-                if (!writeRequests_.empty()) {
-                    toWrite = std::move(writeRequests_);
-                    writeRequests_ = std::deque<WriteRequest>();
+                if (!writeBlocksRequests_.empty()) {
+                    blocksToWrite = std::move(writeBlocksRequests_);
+                    writeBlocksRequests_ = std::deque<WriteBlocksRequest>();
+                }
+
+                if (!writeDataRequests_.empty()) {
+                    dataToWrite = std::move(writeDataRequests_);
+                    writeDataRequests_ = std::deque<WriteDataRequest>();
                 }
 
                 if (!readRequests_.empty()) {
@@ -569,7 +595,7 @@ private:
                 }
             }
 
-            for (auto request = toWrite.begin(); request != toWrite.end(); ++request)
+            for (auto request = blocksToWrite.begin(); request != blocksToWrite.end(); ++request)
                 satisfyRequest(*request);
 
             for (auto request = toRead.begin(); request != toRead.end(); ++request)
@@ -578,19 +604,26 @@ private:
             for (auto request = toVerify.begin(); request != toVerify.end(); ++request)
                 satisfyRequest(*request);
 
+            for (auto request = dataToWrite.begin(); request != dataToWrite.end(); ++request)
+                satisfyRequest(*request);
+
             // Close files that we haven't accessed for some time
             if (lastCleanupTime_ >= Util::Time(0, 0, 30)) {
                 closeOld();
                 lastCleanupTime_ = Util::Time::monotonicTime();
             }
 
-            if (writeRequests_.empty() && readRequests_.empty() && verifyRequests_.empty())
+            if (writeBlocksRequests_.empty() && writeDataRequests_.empty() &&
+                readRequests_.empty() && verifyRequests_.empty())
+            {
                 requestsAvailableEvent_.wait(10 * 1000);
+            }
         }
     }
 
 public:
-    std::deque<WriteRequest> writeRequests_;
+    std::deque<WriteBlocksRequest> writeBlocksRequests_;
+    std::deque<WriteDataRequest> writeDataRequests_;
     std::deque<ReadRequest> readRequests_;
     std::deque<VerifyRequest> verifyRequests_;
 
@@ -627,13 +660,33 @@ void DiskIo::writeBlocks(
 {
     std::lock_guard<std::mutex> l(d->anchor_);
 
-    Private::WriteRequest writeRequest;
+    Private::WriteBlocksRequest writeRequest;
     writeRequest.bundle = &bundle;
     writeRequest.writeList = std::move(writeList);
     writeRequest.onWriteSuccess = onSuccess;
     writeRequest.onWriteFailure = onFailure;
 
-    d->writeRequests_.push_back(std::move(writeRequest));
+    d->writeBlocksRequests_.push_back(std::move(writeRequest));
+    d->requestsAvailableEvent_.signal();
+}
+
+void DiskIo::writeData(
+        const std::string &filename,
+        unsigned long long offset,
+        const std::string &data,
+        const WriteSuccessDelegate &onSuccess,
+        const WriteFailureDelegate &onFailure)
+{
+    Private::WriteDataRequest writeRequest;
+    writeRequest.filename = filename;
+    writeRequest.offset = offset;
+    writeRequest.data = data;
+    writeRequest.onWriteSuccess = onSuccess;
+    writeRequest.onWriteFailure = onFailure;
+
+    std::lock_guard<std::mutex> l(d->anchor_);
+
+    d->writeDataRequests_.push_back(std::move(writeRequest));
     d->requestsAvailableEvent_.signal();
 }
 

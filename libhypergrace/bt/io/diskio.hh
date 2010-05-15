@@ -51,6 +51,9 @@ public:
     void writeBlocks(const TorrentBundle &, WriteList &&,
             const WriteSuccessDelegate &, const WriteFailureDelegate &);
 
+    void writeData(const std::string &, unsigned long long, const std::string &,
+            const WriteSuccessDelegate &, const WriteFailureDelegate &);
+
     void readBlocks(const TorrentBundle &, ReadList &&,
             const ReadSuccessDelegate &, const ReadFailureDelegate &);
 
