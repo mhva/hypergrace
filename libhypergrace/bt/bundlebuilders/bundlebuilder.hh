@@ -36,7 +36,6 @@ class BundleBuilder
 {
 public:
     BundleBuilder(const std::string &);
-    virtual ~BundleBuilder();
 
     void startBuilding();
 
@@ -45,10 +44,13 @@ public: /* events */
     Delegate::Delegate<void ()> onBuildFailed;
 
 protected:
+    virtual ~BundleBuilder();
     virtual void build() = 0;
 
 protected:
     std::string bundleDir_;
+
+private:
     std::thread *workerThread_;
 };
 

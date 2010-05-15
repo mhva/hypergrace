@@ -34,6 +34,8 @@ public:
     LocalFileBundleBuilder(const std::string &, const std::string &);
 
 protected:
+    ~LocalFileBundleBuilder();
+
     void build();
 
 private:

@@ -24,10 +24,10 @@
 
 #include <debug/debug.hh>
 
+#include <bt/bundle/torrentbundle.hh>
 #include <bt/bundle/torrentconfiguration.hh>
 #include <bt/bundle/torrentmodel.hh>
 #include <bt/bundle/torrentstate.hh>
-#include <bt/bundle/torrentbundle.hh>
 
 #include "localfilebundlebuilder.hh"
 
@@ -38,6 +38,10 @@ LocalFileBundleBuilder::LocalFileBundleBuilder(const std::string &bundleDir,
                                                const std::string &torrentFile) :
     BundleBuilder(bundleDir),
     torrentFile_(torrentFile)
+{
+}
+
+LocalFileBundleBuilder::~LocalFileBundleBuilder()
 {
 }
 
@@ -82,6 +86,9 @@ void LocalFileBundleBuilder::build()
 
     onBundleReady(new TorrentBundle(bundleDir_, model, state, conf));
 
-    // This builder instance is no longer needed.
+    // Autodestruct once the building has finished. Creator of the
+    // builder instance has no way of releasing memory of the created
+    // instance because destructor is not accessible to him. (this is
+    // done to prevent callers from preemptively deleting the instance).
     delete this;
 }

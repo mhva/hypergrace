@@ -55,7 +55,7 @@ BundleBuilder::~BundleBuilder()
         workerThread_->detach();
         delete workerThread_;
     } catch (...) {
-        hSevere() << "Failed to detach a thread causing a little memory leak";
+        hWarning() << "Failed to detach builder thread from the std::thread instance";
     }
 }
 
