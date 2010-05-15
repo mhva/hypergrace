@@ -57,7 +57,7 @@ class CommandTask::Private
 public:
     Private(TorrentBundle &bundle,
             Net::Reactor &reactor,
-            std::shared_ptr<DiskIo> diskIo,
+            std::shared_ptr<DiskIo> ioThread,
             Net::BandwidthAllocator &globalDownloadAllocator,
             Net::BandwidthAllocator &globalUploadAllocator,
             ChokeTask &chokeTask,
@@ -65,7 +65,7 @@ public:
             UploadTask &uploadTask) :
         bundle_(bundle),
         reactor_(reactor),
-        diskIo_(diskIo),
+        ioThread_(ioThread),
         globalDownloadAllocator_(globalDownloadAllocator),
         globalUploadAllocator_(globalUploadAllocator),
         chokeTask_(chokeTask),
@@ -76,6 +76,10 @@ public:
     {
         reactor_.setDownloadRateAccumulator(&downloadRate_);
         reactor_.setUploadRateAccumulator(&uploadRate_);
+
+        serializeBundlePart(TorrentBundle::configurationFilename(), bundle_.configuration());
+        serializeBundlePart(TorrentBundle::modelFilename(), bundle_.model());
+        serializeBundlePart(TorrentBundle::stateFilename(), bundle_.state());
     }
 
     void reconfigurePeer(PeerSettings &peerSettings)
@@ -253,6 +257,25 @@ public:
     }
 
 public:
+    template<typename T> void serializeBundlePart(const std::string &filename, const T &object)
+    {
+        ioThread_->writeData(bundle_.bundleDirectory() + "/" + filename, 0, object.toString(),
+                Delegate::make(this, &Private::handleBundleSerializationSuccess),
+                Delegate::make(this, &Private::handleBundleSerializationFailure)
+        );
+    }
+
+    void handleBundleSerializationSuccess()
+    {
+    }
+
+    void handleBundleSerializationFailure()
+    {
+        // TODO: Stop torrent.
+        hSevere() << "Failed to serialize bundle; torrent will be stopped";
+    }
+
+public:
     struct FlushResult {
         unsigned int piece;
 
@@ -269,7 +292,7 @@ public:
             std::move(downloadTask_.cache().flushComplete());
 
         for (auto pieceIt = completePieces.begin(); pieceIt != completePieces.end(); ++pieceIt) {
-            diskIo_->writeBlocks(bundle_, std::move((*pieceIt).second),
+            ioThread_->writeBlocks(bundle_, std::move((*pieceIt).second),
                     Delegate::bind(&Private::notifyWriteSuccess, this, (*pieceIt).first),
                     Delegate::bind(&Private::notifyWriteFailure, this, (*pieceIt).first)
             );
@@ -278,6 +301,8 @@ public:
 
     void processIoResults()
     {
+        unsigned int successes = 0;
+
         for (auto resultIt = ioResults_.begin(); resultIt != ioResults_.end(); ++resultIt) {
             FlushResult &flushResult = *resultIt;
 
@@ -292,6 +317,8 @@ public:
                 bundle_.state().markPieceAsAvailable(flushResult.piece);
                 downloadTask_.notifyDownloadedGoodPiece(flushResult.piece);
                 interestTask_.notifyDownloadedGoodPiece(flushResult.piece);
+
+                ++successes;
                 break;
             default:
                 assert(!"Should not be here.");
@@ -300,11 +327,14 @@ public:
         }
 
         ioResults_.clear();
+
+        if (successes > 0)
+            serializeBundlePart(TorrentBundle::stateFilename(), bundle_.state());
     }
 
     void notifyWriteSuccess(unsigned int piece)
     {
-        diskIo_->verifyPiece(bundle_, piece,
+        ioThread_->verifyPiece(bundle_, piece,
                 Delegate::make(this, &Private::notifyVerifySuccess),
                 Delegate::make(this, &Private::notifyVerifyFailure)
         );
@@ -337,7 +367,7 @@ public:
 public:
     TorrentBundle &bundle_;
     Net::Reactor &reactor_;
-    std::shared_ptr<DiskIo> diskIo_;
+    std::shared_ptr<DiskIo> ioThread_;
 
     Net::BandwidthAllocator &globalDownloadAllocator_;
     Net::BandwidthAllocator &globalUploadAllocator_;
@@ -363,13 +393,13 @@ public:
 CommandTask::CommandTask(
         TorrentBundle &bundle,
         Net::Reactor &reactor,
-        std::shared_ptr<DiskIo> diskIo,
+        std::shared_ptr<DiskIo> ioThread,
         Net::BandwidthAllocator &dla,
         Net::BandwidthAllocator &ula,
         ChokeTask &chokeTask,
         DownloadTask &downloadTask,
         UploadTask &uploadTask) :
-    d(new Private(bundle, reactor, diskIo, dla, ula, chokeTask, downloadTask, uploadTask))
+    d(new Private(bundle, reactor, ioThread, dla, ula, chokeTask, downloadTask, uploadTask))
 {
 }
 
