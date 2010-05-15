@@ -448,7 +448,7 @@ private:
         } else {
             OpenFileDescriptor fileDescriptor;
 
-            fileDescriptor.fd = ::open(filename.c_str(), O_CREAT | O_NOATIME | O_RDWR);
+            fileDescriptor.fd = ::open(filename.c_str(), O_CREAT | O_NOATIME | O_RDWR, 0644);
             fileDescriptor.accessTime = Util::Time::monotonicTime();
 
             file = openFiles_.insert(std::make_pair(filename, fileDescriptor)).first;
