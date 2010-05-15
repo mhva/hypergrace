@@ -33,13 +33,14 @@
 using namespace Hypergrace::Bt;
 
 
-TorrentBundle::TorrentBundle(const std::string &bundleDir,
-                             TorrentModel *model,
-                             TorrentState *state,
-                             TorrentConfiguration *conf) :
+TorrentBundle::TorrentBundle(
+        const std::string &bundleDir,
+        TorrentModel *model,
+        TorrentState *state,
+        TorrentConfiguration *conf) :
+    conf_(conf),
     model_(model),
     state_(state),
-    conf_(conf),
     bundleDir_(bundleDir)
 {
     assert(model_ != 0 && state_ != 0 && conf_ != 0);
@@ -52,55 +53,9 @@ TorrentBundle::~TorrentBundle()
     delete model_;
 }
 
-template<typename T>
-static bool serialize(const std::string &filename, T &object)
+TorrentConfiguration &TorrentBundle::configuration() const
 {
-    // TODO: make a backup if file exists.
-    std::ofstream out(filename, std::ios_base::binary | std::ios_base::out);
-    std::string contents = object.toString();
-
-    out.write(contents.data(), contents.size());
-
-    if (!out.fail()) {
-        return true;
-    } else {
-        remove(filename.c_str());
-        return false;
-    }
-}
-
-bool TorrentBundle::save() const
-{
-    // FIXME: If something fails bundle will be left in the inconsistent
-    // state.
-    std::string modelFilename = bundleDir_ + "/0.hgmodel";
-    std::string stateFilename = bundleDir_ + "/0.hgstate";
-    std::string confFilename = bundleDir_ + "/0.hgconf";
-
-    if (!serialize(stateFilename, *state_)) {
-        hSevere() << "Failed to serialize torrent's state to" << stateFilename;
-        return false;
-    }
-
-    if (!serialize(confFilename, *conf_)) {
-        hSevere() << "Failed to serialize torrent configuration to" << confFilename;
-        return false;
-    }
-
-    // If model doesn't exist we'll create one and if it does we can
-    // skip serializing it.
-    std::ifstream modelFile(modelFilename, std::ios_base::in);
-
-    if (!modelFile.is_open()) {
-        if (!serialize(modelFilename, *model_)) {
-            hSevere() << "Failed to serialize torrent model to" << modelFilename;
-            return false;
-        }
-    } else {
-        modelFile.close();
-    }
-
-    return true;
+    return *conf_;
 }
 
 TorrentModel &TorrentBundle::model() const
@@ -113,7 +68,22 @@ TorrentState &TorrentBundle::state() const
     return *state_;
 }
 
-TorrentConfiguration &TorrentBundle::configuration() const
+const std::string &TorrentBundle::bundleDirectory() const
 {
-    return *conf_;
+    return bundleDir_;
+}
+
+const char *TorrentBundle::configurationFilename()
+{
+    return "0.hgconf";
+}
+
+const char *TorrentBundle::modelFilename()
+{
+    return "0.hgmodel";
+}
+
+const char *TorrentBundle::stateFilename()
+{
+    return "0.hgstate";
 }

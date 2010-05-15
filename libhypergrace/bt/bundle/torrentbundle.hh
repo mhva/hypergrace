@@ -37,16 +37,20 @@ public:
     TorrentBundle(const std::string &, TorrentModel *, TorrentState *, TorrentConfiguration *);
     ~TorrentBundle();
 
-    bool save() const;
-
+    TorrentConfiguration &configuration() const;
     TorrentModel &model() const;
     TorrentState &state() const;
-    TorrentConfiguration &configuration() const;
+
+    const std::string &bundleDirectory() const;
+
+    static const char *configurationFilename();
+    static const char *modelFilename();
+    static const char *stateFilename();
 
 private:
+    TorrentConfiguration *conf_;
     TorrentModel *model_;
     TorrentState *state_;
-    TorrentConfiguration *conf_;
 
     std::string bundleDir_;
 };
