@@ -166,13 +166,13 @@ bool TorrentConfiguration::preallocateStorage() const
     return Bencode::Path(configTree_, "prealloc-storage").resolve<Bencode::Integer>();
 }
 
-std::string TorrentConfiguration::toString()
+std::string TorrentConfiguration::toString() const
 {
     std::lock_guard<std::recursive_mutex> l(anchor_);
 
     // Convert the set containing files that we've been downloading
     // into BencodeList and insert the list into the config tree so
-    // it can be saved together with the rest of the config tree
+    // it can be saved together with the rest of the config tree.
     Bencode::Object *filesObject = new Bencode::BencodeList();
     auto &files = filesObject->get<Bencode::List>();
 
@@ -181,12 +181,12 @@ std::string TorrentConfiguration::toString()
 
     configTree_->get<Bencode::Dictionary>()["sched-files"] = filesObject;
 
-    // Save the config tree to config file
+    // Save the config tree to config file.
     std::ostringstream out;
     Bencode::SerializationVisitor serialize(out);
     configTree_->accept(serialize);
 
-    // Delete the temporary file list we have created earlier
+    // Delete the temporary file list we have created earlier.
     configTree_->get<Bencode::Dictionary>().erase("sched-files");
 
     Bencode::ReleaseMemoryVisitor freemem;
@@ -200,7 +200,7 @@ TorrentConfiguration *TorrentConfiguration::fromString(const std::string &s)
     std::istringstream in(s, std::ios_base::binary | std::ios_base::in);
     Bencode::Object *configTree = 0;
 
-    // Parse the string and ensure that it's a valid format
+    // Parse the string and ensure that it's a valid format.
     try {
         configTree = Bencode::Reader::parse(in);
 
@@ -208,7 +208,7 @@ TorrentConfiguration *TorrentConfiguration::fromString(const std::string &s)
             throw std::runtime_error("Configuration data is damaged");
 
         // Ensure that mandatory dictionary keys do exist and their
-        // values have the right type
+        // values have the right type.
         Bencode::Path(configTree, "uload-rate").resolve<Bencode::Integer>();
         Bencode::Path(configTree, "uload-slots").resolve<Bencode::Integer>();
         Bencode::Path(configTree, "dload-rate").resolve<Bencode::Integer>();
@@ -224,7 +224,7 @@ TorrentConfiguration *TorrentConfiguration::fromString(const std::string &s)
 
     TorrentConfiguration *conf = new TorrentConfiguration();
 
-    // Build a file cache
+    // Build a file cache.
     try {
         auto &files = Bencode::Path(configTree, "sched-files").resolve<Bencode::List>();
 
@@ -240,12 +240,12 @@ TorrentConfiguration *TorrentConfiguration::fromString(const std::string &s)
     Bencode::ReleaseMemoryVisitor freemem;
 
     // We don't need sched-files value anymore because all file list
-    // is transferred to the cache
+    // is transferred to the cache.
     Bencode::Object *filesObject = configTree->get<Bencode::Dictionary>()["sched-files"];
     configTree->get<Bencode::Dictionary>().erase("sched-files");
     filesObject->accept(freemem);
 
-    // Don't forget to free memory for a default configuration tree
+    // Don't forget to free memory for a default configuration tree.
     conf->configTree_->accept(freemem);
     conf->configTree_ = configTree;
     return conf;

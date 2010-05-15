@@ -59,7 +59,7 @@ public:
     bool preallocateStorage() const;
 
     static TorrentConfiguration *fromString(const std::string &);
-    std::string toString();
+    std::string toString() const;
 
 public: /* signals */
     Delegate::Signal<const std::set<std::string> &> onFileMaskChanged;
