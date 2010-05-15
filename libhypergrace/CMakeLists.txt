@@ -19,6 +19,7 @@ set(LIBH_SOURCES
     bt/announce/tracker.cc
     bt/announce/trackerresponse.cc
     bt/bundlebuilders/bundlebuilder.cc
+    bt/bundlebuilders/bundleunmarshaller.cc
     bt/bundlebuilders/localfilebundlebuilder.cc
     bt/bundle/peerregistry.cc
     bt/bundle/torrentconfiguration.cc
@@ -26,7 +27,6 @@ set(LIBH_SOURCES
     bt/bundle/torrentstate.cc
     bt/bundle/torrentmodel.cc
     bt/bundle/trackerregistry.cc
-    bt/bundle/savestatetask.cc
     bt/io/blockcache.cc
     bt/io/diskio.cc
     bt/peerwire/commandtask.cc
