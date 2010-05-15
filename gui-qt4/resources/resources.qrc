@@ -1,0 +1,8 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource>
+    <file>mimetype-bittorrent.png</file>
+    <file>mimetype-folder.png</file>
+    <file>mimetype-folder48.png</file>
+    <file>mimetype-unknown-file.png</file>
+</qresource>
+</RCC>
