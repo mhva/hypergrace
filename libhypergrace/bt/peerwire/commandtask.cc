@@ -156,7 +156,6 @@ public:
     bool maintainFileSchedule(const std::set<std::string> &unmaskedFiles)
     {
         const auto &files = bundle_.model().fileList();
-        unsigned int pieceSize = bundle_.model().pieceSize();
         std::string storageDirectory = bundle_.configuration().storageDirectory();
 
         unsigned int piece = 0;
@@ -164,49 +163,83 @@ public:
         unsigned int filesUnmaskedOnEdge = 0;
 
         for (auto file = files.begin(); file != files.end(); ++file) {
-            bool unmask;
+            bool unmaskCurrentFile;
 
             if (unmaskedFiles.find((*file).filename) != unmaskedFiles.end()) {
-                unmask = true;
-                ++filesUnmaskedOnEdge;
+                unmaskCurrentFile = true;
+
+                // Don't unmask piece if the zero-sized file has been
+                // unmasked. This helps us to conserve bandiwdth on
+                // pieces where user has unmasked only empty files.
+                if ((*file).size > 0)
+                    ++filesUnmaskedOnEdge;
 
                 if (!updateFileStorage(storageDirectory + (*file).filename, (*file).size))
                     return false;
             } else {
-                unmask = false;
+                unmaskCurrentFile = false;
+            }
+
+            if ((*file).size == 0)
+                continue;
+
+            unsigned int pieceSize;
+
+            if (piece != bundle_.model().pieceCount() - 1) {
+                pieceSize = bundle_.model().pieceSize();
+            } else {
+                unsigned int modulo = bundle_.model().torrentSize() % bundle_.model().pieceSize();
+                pieceSize = modulo > 0 ? modulo : bundle_.model().pieceSize();
             }
 
             if ((*file).size + edgeOffset >= pieceSize) {
-                // Unmask the piece on the left edge of file if contains
-                // a part of at least one file (current file included)
-                // that must be unmasked.
-                // Don't bother with checking whether the piece available
-                // or not. The marking method will do this for us.
-                if (filesUnmaskedOnEdge > 0)
+                // Unmask the piece on the left edge of the current
+                // file if it contains a part of at least one file
+                // that should be unmasked.
+                if (filesUnmaskedOnEdge > 0) {
                     bundle_.state().markPieceAsInteresting(piece);
-                else
+                } else {
                     bundle_.state().markPieceAsUninteresting(piece);
+                }
+
+                ++piece;
+
+                // Proceed to the next file if this file fully fits in
+                // the one piece.
+                if ((*file).size + edgeOffset == pieceSize) {
+                    edgeOffset = 0;
+                    continue;
+                }
 
                 unsigned long long alignedSize = (*file).size - (pieceSize - edgeOffset);
                 unsigned int limit = piece + alignedSize / pieceSize;
 
+                assert(limit <= bundle_.model().pieceCount());
+
                 // Mask/Unmask all full-sized pieces that the current
                 // file covers.
-                while (piece < limit) {
-                    if (unmask)
+                for (; piece < limit; ++piece) {
+                    if (unmaskCurrentFile) {
                         bundle_.state().markPieceAsInteresting(piece);
-                    else
+                    } else {
                         bundle_.state().markPieceAsUninteresting(piece);
-
-                    ++piece;
+                    }
                 }
 
                 edgeOffset = alignedSize % pieceSize;
 
-                if (edgeOffset > 0 && unmask)
-                    filesUnmaskedOnEdge = 1;
-                else
-                    filesUnmaskedOnEdge = 0;
+                // Torrent's last piece might never be [un]masked if
+                // there're no files behind the current one. [Un]mask
+                // the last piece of the current file preemptively.
+                if (edgeOffset > 0 && piece < bundle_.model().pieceCount()) {
+                    if (unmaskCurrentFile) {
+                        bundle_.state().markPieceAsInteresting(piece);
+                    } else {
+                        bundle_.state().markPieceAsUninteresting(piece);
+                    }
+                }
+
+                filesUnmaskedOnEdge = (edgeOffset > 0 && unmaskCurrentFile) ? 1 : 0;
             } else {
                 // The file fits in the current piece.
                 continue;
