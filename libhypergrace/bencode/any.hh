@@ -128,7 +128,7 @@ private:
 
             if (buffer != 0) {
                 std::string result(buffer);
-                delete buffer;
+                free(buffer);
 
                 return result;
             } else {
