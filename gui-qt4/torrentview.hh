@@ -52,10 +52,10 @@ public slots:
     void handleBundleConfiguredEvent(Hypergrace::Bt::TorrentBundle *, bool);
 
 private:
-    void postBuildSuccessEvent(QString, Hypergrace::Bt::TorrentBundle *);
-    void postBuildFailureEvent(QString);
+    void postBuildCompleteEvent(Hypergrace::Bt::TorrentBundle *, int, QString);
 
     void setupUi();
+    void restoreTorrentList();
 
 private:
     QString storagePath_;
