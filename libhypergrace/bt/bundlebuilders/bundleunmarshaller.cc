@@ -118,7 +118,7 @@ void BundleUnmarshaller::build()
         return;
     }
 
-    TorrentState *state = TorrentState::fromString(modelBuffer);
+    TorrentState *state = TorrentState::fromString(stateBuffer);
 
     if (state == 0) {
         hSevere() << "Failed to restore torrent's state from file"
