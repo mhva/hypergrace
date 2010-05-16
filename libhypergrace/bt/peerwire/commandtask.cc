@@ -77,6 +77,8 @@ public:
         reactor_.setDownloadRateAccumulator(&downloadRate_);
         reactor_.setUploadRateAccumulator(&uploadRate_);
 
+        Util::FileSystem::createPath(bundle_.bundleDirectory() + "/", 0755);
+
         serializeBundlePart(TorrentBundle::configurationFilename(), bundle_.configuration());
         serializeBundlePart(TorrentBundle::modelFilename(), bundle_.model());
         serializeBundlePart(TorrentBundle::stateFilename(), bundle_.state());
