@@ -49,22 +49,14 @@ bool BundleUnmarshaller::read(const std::string &filename, std::string &buffer)
     if (!in.is_open())
         return false;
 
-    in.seekg(0, std::ios::end);
+    char tmp[10240];
 
-    size_t size = in.tellg();
-
-    in.seekg(0, std::ios::beg);
-
-    char tmp[size];
-
-    in.read(tmp, size);
-
-    if (!in.bad() && in.eof()) {
-        buffer.assign(tmp, size);
-        return true;
-    } else {
-        return false;
+    while (!in.fail()) {
+        in.read(tmp, sizeof(tmp));
+        buffer.append(tmp, sizeof(tmp));
     }
+
+    return in.eof() ? true : false;
 }
 
 void BundleUnmarshaller::build()
