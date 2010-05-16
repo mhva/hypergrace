@@ -168,10 +168,11 @@ std::string TorrentState::toString() const
 {
     std::ostringstream out(std::ios_base::binary | std::ios_base::out);
 
+    unsigned int pieceCount = availablePieces_.bitCount();
+
+    // TODO: Store integers in the big-endian order.
     out.write((char *)&downloaded_, sizeof(downloaded_));
     out.write((char *)&uploaded_, sizeof(uploaded_));
-
-    uint32_t pieceCount = availablePieces_.bitCount();
     out.write((char *)&pieceCount, sizeof(pieceCount));
     out.write((char *)availablePieces_.cstr(), availablePieces_.byteCount());
 
@@ -180,9 +181,9 @@ std::string TorrentState::toString() const
 
 TorrentState *TorrentState::fromString(const std::string &string)
 {
-    unsigned long long downloaded;
-    unsigned long long uploaded;
-    uint32_t pieceCount;
+    unsigned long long downloaded = 0;
+    unsigned long long uploaded = 0;
+    uint32_t pieceCount = 0;
 
     std::istringstream in(string, std::ios_base::binary | std::ios_base::in);
 
@@ -206,7 +207,7 @@ TorrentState *TorrentState::fromString(const std::string &string)
     }
 
     for (size_t piece = 0; piece < pieceCount; ++piece) {
-        if (torrentState->availablePieces_.bit(piece)) {
+        if (!torrentState->availablePieces_.bit(piece)) {
             torrentState->scheduledPieces_.set(piece);
         } else {
             torrentState->scheduledPieces_.unset(piece);
