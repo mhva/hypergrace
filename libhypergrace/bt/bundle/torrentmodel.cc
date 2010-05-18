@@ -46,6 +46,74 @@ using namespace Hypergrace;
 using namespace Bt;
 
 
+class RelinkAzureusKeys : public Bencode::ObjectVisitor
+{
+public:
+    void visit(Bencode::BencodeDictionary *dict)
+    {
+        const char utf8[] = { '.', 'u', 't', 'f', '-', '8' };
+        auto &d = dict->get<Bencode::Dictionary>();
+
+        std::vector<std::string> azureusKeys;
+
+        // Extract all azureus keys from the dictionary.
+        for (auto it = d.begin(); it != d.end(); ++it) {
+            std::string key = (*it).first;
+
+            // But before doing anything visit the value first.
+            (*it).second->accept(*this);
+
+            if (key.size() < sizeof(utf8))
+                continue;
+
+            if (key.compare(key.size() - sizeof(utf8), sizeof(utf8), utf8, sizeof(utf8)) == 0)
+                azureusKeys.push_back(key);
+        }
+
+        std::vector<std::string> keysToErase;
+
+        for (auto it = azureusKeys.begin(); it != azureusKeys.end(); ++it) {
+            std::string azureusKey = *it;
+            std::string siblingKey = azureusKey.substr(0, azureusKey.size() - sizeof(utf8));
+
+            auto azureusKeyIt = d.find(azureusKey);
+            auto siblingKeyIt = d.find(siblingKey);
+
+            if (siblingKeyIt == d.end())
+                continue;
+
+            // Ensure that both keys are associated with the String
+            // values. Exception will be thrown if one of the keys has
+            // a non-string value.
+            try {
+                (*azureusKeyIt).second->get<Bencode::String>();
+                (*siblingKeyIt).second->get<Bencode::String>();
+            } catch (...) {
+                continue;
+            }
+
+            // Relink the azureus key to the sibling.
+            delete (*siblingKeyIt).second;
+            (*siblingKeyIt).second = (*azureusKeyIt).second;
+
+            // We will erase the azureus key since we are no longer
+            // need it.
+            keysToErase.push_back(azureusKey);
+
+            hDebug() << "Relinked" << azureusKey << "->" << siblingKey;
+        }
+
+        std::for_each(
+            keysToErase.begin(), keysToErase.end(),
+            [&d](const std::string &k) { d.erase(k); }
+        );
+    }
+
+    void visit(Bencode::BencodeList *) {}
+    void visit(Bencode::BencodeInteger *) {}
+    void visit(Bencode::BencodeString *) {}
+};
+
 TorrentModel::TorrentModel(Bencode::Object *metadata) :
     metadata_(metadata),
     torrentSize_(0)
@@ -322,6 +390,10 @@ TorrentModel *TorrentModel::fromString(const std::string &string)
             throw std::runtime_error("Torrent metadata has malformed bencode structure");
 
         tryValidateMetadata(metadata);
+
+        RelinkAzureusKeys relinker;
+        metadata->accept(relinker);
+
         return new TorrentModel(metadata);
     } catch (std::exception &e) {
         hDebug() << e.what();
