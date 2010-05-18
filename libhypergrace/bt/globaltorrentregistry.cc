@@ -199,11 +199,6 @@ bool GlobalTorrentRegistry::startTorrent(TorrentBundle *bundle)
                 commandTask, &CommandTask::notifyRateLimitChanged);
     }
 
-    if (!torrent.commandTask->allocateStorage()) {
-        hSevere() << "Failed to allocate storage for torrent";
-        return false;
-    }
-
     if (!torrent.reactor->start()) {
         hSevere() << "Unable to start torrent's reactor";
         return false;

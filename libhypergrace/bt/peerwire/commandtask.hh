@@ -50,10 +50,8 @@ public:
                 ChokeTask &, DownloadTask &, UploadTask &);
     ~CommandTask();
 
-    bool allocateStorage();
-
-    void notifyRateLimitChanged(int);
-    void notifyFileMaskChanged(const std::set<std::string> &);
+    void notifyRateLimitChanged();
+    void notifyFileMaskChanged();
     void notifyPeerConnected(const PeerSettings &);
 
 private:

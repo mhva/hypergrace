@@ -454,11 +454,6 @@ CommandTask::~CommandTask()
     delete d;
 }
 
-bool CommandTask::allocateStorage()
-{
-    return d->maintainFileSchedule(d->bundle_.configuration().unmaskedFiles());
-}
-
 void CommandTask::notifyRateLimitChanged()
 {
     std::lock_guard<std::mutex> l(d->anchor_);
