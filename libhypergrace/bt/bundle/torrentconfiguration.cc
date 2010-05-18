@@ -61,13 +61,13 @@ TorrentConfiguration::~TorrentConfiguration()
     configTree_->accept(freemem);
 }
 
-void TorrentConfiguration::setUnmaskedFiles(std::set<std::string> &&files)
+void TorrentConfiguration::setUnmaskedFiles(std::set<size_t> &&files)
 {
     std::lock_guard<std::recursive_mutex> l(anchor_);
 
-    fileCache_ = std::move(files);
+    unmaskedFiles_ = std::move(files);
 
-    onFileMaskChanged(fileCache_);
+    onFileMaskChanged();
 }
 
 void TorrentConfiguration::limitDownloadRate(int rate)
@@ -75,7 +75,7 @@ void TorrentConfiguration::limitDownloadRate(int rate)
     std::lock_guard<std::recursive_mutex> l(anchor_);
 
     Bencode::Path(configTree_, "dload-rate").resolve<Bencode::Integer>() = rate;
-    onDownloadRateLimitChanged(rate);
+    onDownloadRateLimitChanged();
 }
 
 void TorrentConfiguration::limitUploadRate(int rate)
@@ -83,7 +83,7 @@ void TorrentConfiguration::limitUploadRate(int rate)
     std::lock_guard<std::recursive_mutex> l(anchor_);
 
     Bencode::Path(configTree_, "uload-rate").resolve<Bencode::Integer>() = rate;
-    onUploadRateLimitChanged(rate);
+    onUploadRateLimitChanged();
 }
 
 void TorrentConfiguration::limitConnections(int limit)
@@ -91,7 +91,7 @@ void TorrentConfiguration::limitConnections(int limit)
     std::lock_guard<std::recursive_mutex> l(anchor_);
 
     Bencode::Path(configTree_, "connection-limit").resolve<Bencode::Integer>() = limit;
-    onConnectionLimitChanged(limit);
+    onConnectionLimitChanged();
 }
 
 void TorrentConfiguration::setUploadSlotCount(unsigned int count)
@@ -99,7 +99,7 @@ void TorrentConfiguration::setUploadSlotCount(unsigned int count)
     std::lock_guard<std::recursive_mutex> l(anchor_);
 
     Bencode::Path(configTree_, "uload-slots").resolve<Bencode::Integer>() = count;
-    onUploadSlotCountChanged(count);
+    onUploadSlotCountChanged();
 }
 
 void TorrentConfiguration::setStorageDirectory(const std::string &path)
@@ -107,7 +107,7 @@ void TorrentConfiguration::setStorageDirectory(const std::string &path)
     std::lock_guard<std::recursive_mutex> l(anchor_);
 
     Bencode::Path(configTree_, "storage-dir").resolve<Bencode::String>() = path;
-    onStorageDirectoryChanged(path);
+    onStorageDirectoryChanged();
 }
 
 void TorrentConfiguration::setPreallocateStorage(bool preallocate)
@@ -117,11 +117,11 @@ void TorrentConfiguration::setPreallocateStorage(bool preallocate)
     Bencode::Path(configTree_, "prealloc-storage").resolve<Bencode::Integer>() = preallocate;
 }
 
-std::set<std::string> TorrentConfiguration::unmaskedFiles() const
+std::set<size_t> TorrentConfiguration::unmaskedFiles() const
 {
     std::lock_guard<std::recursive_mutex> l(anchor_);
 
-    return fileCache_;
+    return unmaskedFiles_;
 }
 
 int TorrentConfiguration::downloadRateLimit() const
@@ -176,8 +176,8 @@ std::string TorrentConfiguration::toString() const
     Bencode::Object *filesObject = new Bencode::BencodeList();
     auto &files = filesObject->get<Bencode::List>();
 
-    for (auto file = fileCache_.begin(); file != fileCache_.end(); ++file)
-        files.push_back(new Bencode::BencodeString(*file));
+    for (auto file = unmaskedFiles_.begin(); file != unmaskedFiles_.end(); ++file)
+        files.push_back(new Bencode::BencodeInteger(*file));
 
     configTree_->get<Bencode::Dictionary>()["sched-files"] = filesObject;
 
@@ -224,12 +224,12 @@ TorrentConfiguration *TorrentConfiguration::fromString(const std::string &s)
 
     TorrentConfiguration *conf = new TorrentConfiguration();
 
-    // Build a file cache.
+    // Rebuild the unmasked file index.
     try {
         auto &files = Bencode::Path(configTree, "sched-files").resolve<Bencode::List>();
 
         for (auto file = files.begin(); file != files.end(); ++file)
-            conf->fileCache_.insert((*file)->get<Bencode::String>());
+            conf->unmaskedFiles_.insert((*file)->get<Bencode::Integer>());
     } catch (std::exception &e) {
         hDebug() << e.what();
         hSevere() << "Cannot rebuild a file cache because the file list has an invalid "

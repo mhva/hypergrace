@@ -42,7 +42,7 @@ public:
     TorrentConfiguration();
     ~TorrentConfiguration();
 
-    void setUnmaskedFiles(std::set<std::string> &&);
+    void setUnmaskedFiles(std::set<size_t> &&);
     void limitDownloadRate(int);
     void limitUploadRate(int);
     void limitConnections(int);
@@ -50,7 +50,7 @@ public:
     void setStorageDirectory(const std::string &);
     void setPreallocateStorage(bool);
 
-    std::set<std::string> unmaskedFiles() const;
+    std::set<size_t> unmaskedFiles() const;
     int downloadRateLimit() const;
     int uploadRateLimit() const;
     int connectionLimit() const;
@@ -62,12 +62,12 @@ public:
     std::string toString() const;
 
 public: /* signals */
-    Delegate::Signal<const std::set<std::string> &> onFileMaskChanged;
-    Delegate::Signal<int> onUploadRateLimitChanged;
-    Delegate::Signal<int> onDownloadRateLimitChanged;
-    Delegate::Signal<int> onConnectionLimitChanged;
-    Delegate::Signal<unsigned int> onUploadSlotCountChanged;
-    Delegate::Signal<const std::string &> onStorageDirectoryChanged;
+    Delegate::Signal<> onFileMaskChanged;
+    Delegate::Signal<> onUploadRateLimitChanged;
+    Delegate::Signal<> onDownloadRateLimitChanged;
+    Delegate::Signal<> onConnectionLimitChanged;
+    Delegate::Signal<> onUploadSlotCountChanged;
+    Delegate::Signal<> onStorageDirectoryChanged;
 
 private:
     TorrentConfiguration(Bencode::Object *);
@@ -75,7 +75,7 @@ private:
 private:
     Bencode::Object *configTree_;
 
-    std::set<std::string> fileCache_;
+    std::set<size_t> unmaskedFiles_;
     mutable std::recursive_mutex anchor_;
 };
 
