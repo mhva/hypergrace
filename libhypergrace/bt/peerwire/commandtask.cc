@@ -72,7 +72,8 @@ public:
         interestTask_(bundle),
         downloadTask_(downloadTask),
         uploadTask_(uploadTask),
-        resetAllocators_(true)
+        resetAllocators_(true),
+        resetScheduledPiecesMask_(true)
     {
         reactor_.setDownloadRateAccumulator(&downloadRate_);
         reactor_.setUploadRateAccumulator(&uploadRate_);
@@ -153,34 +154,31 @@ public:
         }
     }
 
-    bool maintainFileSchedule(const std::set<std::string> &unmaskedFiles)
+    void resetScheduledPiecesMask(const std::set<size_t> &unmaskedFiles)
     {
         const auto &files = bundle_.model().fileList();
-        std::string storageDirectory = bundle_.configuration().storageDirectory();
 
         unsigned int piece = 0;
         unsigned int edgeOffset = 0;
         unsigned int filesUnmaskedOnEdge = 0;
 
-        for (auto file = files.begin(); file != files.end(); ++file) {
+        for (size_t fileIndex = 0; fileIndex < files.size(); ++fileIndex) {
+            const FileDescriptor &file = files[fileIndex];
             bool unmaskCurrentFile;
 
-            if (unmaskedFiles.find((*file).filename) != unmaskedFiles.end()) {
+            if (unmaskedFiles.find(fileIndex) != unmaskedFiles.end()) {
                 unmaskCurrentFile = true;
 
                 // Don't unmask piece if the zero-sized file has been
                 // unmasked. This helps us to conserve bandiwdth on
                 // pieces where user has unmasked only empty files.
-                if ((*file).size > 0)
+                if (file.size > 0)
                     ++filesUnmaskedOnEdge;
-
-                if (!updateFileStorage(storageDirectory + (*file).filename, (*file).size))
-                    return false;
             } else {
                 unmaskCurrentFile = false;
             }
 
-            if ((*file).size == 0)
+            if (file.size == 0)
                 continue;
 
             unsigned int pieceSize;
@@ -192,7 +190,7 @@ public:
                 pieceSize = modulo > 0 ? modulo : bundle_.model().pieceSize();
             }
 
-            if ((*file).size + edgeOffset >= pieceSize) {
+            if (file.size + edgeOffset >= pieceSize) {
                 // Unmask the piece on the left edge of the current
                 // file if it contains a part of at least one file
                 // that should be unmasked.
@@ -206,12 +204,12 @@ public:
 
                 // Proceed to the next file if this file fully fits in
                 // the one piece.
-                if ((*file).size + edgeOffset == pieceSize) {
+                if (file.size + edgeOffset == pieceSize) {
                     edgeOffset = 0;
                     continue;
                 }
 
-                unsigned long long alignedSize = (*file).size - (pieceSize - edgeOffset);
+                unsigned long long alignedSize = file.size - (pieceSize - edgeOffset);
                 unsigned int limit = piece + alignedSize / pieceSize;
 
                 assert(limit <= bundle_.model().pieceCount());
@@ -244,6 +242,18 @@ public:
                 // The file fits in the current piece.
                 continue;
             }
+        }
+    }
+
+    bool updateUnmaskedFilesStorage(const std::set<size_t> &unmaskedFiles)
+    {
+        std::string storageDirectory = bundle_.configuration().storageDirectory();
+
+        for (auto indexIt = unmaskedFiles.begin(); indexIt != unmaskedFiles.end(); ++indexIt) {
+            const FileDescriptor &file = bundle_.model().fileList()[*indexIt];
+
+            if (!updateFileStorage(storageDirectory + file.filename, file.size))
+                return false;
         }
 
         return true;
@@ -418,6 +428,7 @@ public:
     Net::RateAccumulator uploadRate_;
 
     volatile bool resetAllocators_;
+    volatile bool resetScheduledPiecesMask_;
 
     std::deque<FlushResult> ioResults_;
     std::deque<PeerSettings> waitingPeers_;
@@ -448,16 +459,18 @@ bool CommandTask::allocateStorage()
     return d->maintainFileSchedule(d->bundle_.configuration().unmaskedFiles());
 }
 
-void CommandTask::notifyRateLimitChanged(int)
+void CommandTask::notifyRateLimitChanged()
 {
     std::lock_guard<std::mutex> l(d->anchor_);
 
     d->resetAllocators_ = true;
 }
 
-void CommandTask::notifyFileMaskChanged(const std::set<std::string> &unmaskedFiles)
+void CommandTask::notifyFileMaskChanged()
 {
-    d->maintainFileSchedule(unmaskedFiles);
+    std::lock_guard<std::mutex> l(d->anchor_);
+
+    d->resetScheduledPiecesMask_ = true;
 }
 
 void CommandTask::notifyPeerConnected(const PeerSettings &peerSettings)
@@ -479,6 +492,18 @@ void CommandTask::execute()
     if (d->resetAllocators_) {
         d->resetAllocators();
         d->resetAllocators_ = false;
+    }
+
+    // Update the scheduled pieces mask if the unmasked file set has
+    // been changed.
+    if (d->resetScheduledPiecesMask_) {
+        std::set<size_t> unmaskedFiles = d->bundle_.configuration().unmaskedFiles();
+
+        d->resetScheduledPiecesMask(unmaskedFiles);
+        // TODO: Handle failure case.
+        d->updateUnmaskedFilesStorage(unmaskedFiles);
+
+        d->resetScheduledPiecesMask_ = false;
     }
 
     // Renew available bandwith amount.
