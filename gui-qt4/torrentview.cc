@@ -106,7 +106,7 @@ TorrentView::TorrentView(QWidget *parent) :
     storagePath_ += "/hypergrace";
     storagePath_ = QDir::cleanPath(storagePath_);
 
-    hDebug() << "Set storage directory to" << storagePath_.toLatin1().data();
+    hDebug() << "Set storage directory to" << storagePath_.toUtf8().data();
 
     restoreTorrentList();
 }
@@ -135,7 +135,7 @@ void TorrentView::restoreTorrentList()
         QString bundleDirectory = storageDirectory.path() + "/" + *torrent;
 
         Bt::BundleUnmarshaller *unmarshaller =
-            new Bt::BundleUnmarshaller(bundleDirectory.toLatin1().data());
+            new Bt::BundleUnmarshaller(bundleDirectory.toUtf8().data());
 
         unmarshaller->onBundleReady = Delegate::bind(&TorrentView::postBuildCompleteEvent, this,
                 _1, (int)BuildCompleteEvent::MarshalledBundle, bundleDirectory);
@@ -217,12 +217,12 @@ void TorrentView::openLocalFile(const QString &filename)
     } while (bundleDirectory.exists());
 
     hDebug() << "Bundle directory for the new torrent has been set to"
-             << bundleDirectory.absolutePath().toLatin1().data();
+             << bundleDirectory.absolutePath().toUtf8().data();
 
     Bt::LocalFileBundleBuilder *tbb =
         new Bt::LocalFileBundleBuilder(
-                bundleDirectory.absolutePath().toLatin1().data(),
-                filename.toLatin1().data());
+                bundleDirectory.absolutePath().toUtf8().data(),
+                filename.toUtf8().data());
 
     // We cannot bootstrap torrent outside the GUI thread because Qt
     // doesn't allow interacting with widgets outside the main thread.

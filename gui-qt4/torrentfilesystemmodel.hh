@@ -21,9 +21,9 @@
 #ifndef TORRENTFILESYSTEMMODEL_HH_
 #define TORRENTFILESYSTEMMODEL_HH_
 
+#include <set>
+
 #include <QStandardItemModel>
-#include <QString>
-#include <QVector>
 
 #include <delegate/delegate.hh>
 
@@ -41,7 +41,7 @@ class TorrentFilesystemModel : public QStandardItemModel
 public:
     TorrentFilesystemModel(const Hypergrace::Bt::TorrentModel &, QObject *);
 
-    QVector<QString> enumSelectedFiles() const;
+    std::set<size_t> enumUnmaskedFiles() const;
     unsigned long long selectedSize() const;
 
 signals:
@@ -59,7 +59,7 @@ private:
     void updateCheckStateUpwards(QStandardItem *);
 
 private:
-    unsigned long long selectedSize_;
+    unsigned long long totalDownloadSize_;
 };
 
 #endif /* TORRENTFILESYSTEMMODEL_HH_ */

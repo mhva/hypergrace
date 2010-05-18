@@ -269,15 +269,11 @@ void PreviewTorrentDialog::handleDblClickTreeItemEvent(QTreeWidgetItem *item, in
 
 void PreviewTorrentDialog::handleAcceptDownloadEvent()
 {
-    auto selectedFiles = model_->enumSelectedFiles();
-    std::set<std::string> unmaskedFiles;
+    std::set<size_t> unmaskedFiles = model_->enumUnmaskedFiles();
+    QString storageDirectory = ui_.customDownloadDirectory->text();
 
-    for (auto file = selectedFiles.begin(); file != selectedFiles.end(); ++file)
-        unmaskedFiles.insert((*file).toLatin1().data());
-
-    QString location = ui_.customDownloadDirectory->text();
     bundle_->configuration().setUnmaskedFiles(std::move(unmaskedFiles));
-    bundle_->configuration().setStorageDirectory(location.toLatin1().data());
+    bundle_->configuration().setStorageDirectory(storageDirectory.toUtf8().data());
 
     onBundleConfigured(bundle_, ui_.startDownloadAutomatically->isChecked());
 

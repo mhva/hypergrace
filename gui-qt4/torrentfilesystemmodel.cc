@@ -18,6 +18,7 @@
    Fifth Floor, Boston, MA 02110-1301, USA.
 */
 
+#include <set>
 #include <string>
 
 #include <QDebug>
@@ -37,62 +38,67 @@
 using namespace Hypergrace;
 
 
-static void insertFile(QHash<QString, QStandardItem *> &storage,
-                       FileIconProvider &iconProvider,
-                       const Bt::FileDescriptor &fileDescriptor)
+static void insertFile(
+        QHash<QString, QStandardItem *> &storage,
+        FileIconProvider &iconProvider,
+        const Bt::TorrentModel &model,
+        size_t fileIndex)
 {
-    QString path = QString::fromUtf8(fileDescriptor.filename.c_str());
+    const Bt::FileDescriptor &file = model.fileList()[fileIndex];
+    QString path = QString::fromUtf8(file.filename.c_str());
+    int slashOffset = path.size();
+
     QList<QStandardItem *> childRow;
-    int slash = path.size();
 
     do {
         auto pos = storage.find(path);
 
         if (pos == storage.end()) {
-            // Setup the Filename column
-            QStandardItem *filename = new QStandardItem();
+            // Setup the Filename column.
+            QStandardItem *filenameItem = new QStandardItem();
 
             if (path.endsWith('/')) {
-                QString name = path.mid(0, path.size() - 1);
+                QString text;
+                text = path.mid(0, path.size() - 1);
+                text = text.mid(text.lastIndexOf('/') + 1);
 
-                filename->setData(QVariant(name));
-                name = name.mid(name.lastIndexOf('/') + 1);
-                filename->setText(name);
-                filename->setIcon(QIcon::fromTheme("folder", QIcon(":/mimetype-folder.png")));
+                filenameItem->setText(text);
+                filenameItem->setIcon(QIcon::fromTheme("folder", QIcon(":/mimetype-folder.png")));
             } else {
-                filename->setText(path.mid(path.lastIndexOf('/') + 1));
-                filename->setData(QVariant(path));
-                filename->setIcon(iconProvider.icon(path));
+                filenameItem->setData(QVariant((uint)fileIndex));
+                filenameItem->setText(path.mid(path.lastIndexOf('/') + 1));
+                filenameItem->setIcon(iconProvider.icon(path));
             }
 
-            filename->setToolTip(filename->text());
-            filename->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable | Qt::ItemIsUserCheckable);
-            filename->setCheckState(Qt::Checked);
+            filenameItem->setToolTip(filenameItem->text());
+            filenameItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable |
+                                   Qt::ItemIsUserCheckable);
+            filenameItem->setCheckState(Qt::Checked);
 
-            // Setup the Size column
-            QStandardItem *size = new QStandardItem();
+            // Setup the Size column.
+            QStandardItem *sizeItem = new QStandardItem();
 
-            size->setText(PrettyPrint::printSize(fileDescriptor.size));
-            size->setData(QVariant(fileDescriptor.size));
-            size->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
+            sizeItem->setText(PrettyPrint::printSize(file.size));
+            sizeItem->setData(QVariant(file.size));
+            sizeItem->setFlags(Qt::ItemIsEnabled | Qt::ItemIsSelectable);
 
             QList<QStandardItem *> currentRow;
-            currentRow.push_back(filename);
-            currentRow.push_back(size);
+            currentRow.push_back(filenameItem);
+            currentRow.push_back(sizeItem);
 
-            // If there's a child row, insert it into the current one
+            // If there's a child row, insert it into the current one.
             if (!childRow.empty())
-                filename->appendRow(childRow);
+                filenameItem->appendRow(childRow);
 
             childRow = currentRow;
-            storage.insert(path, filename);
+            storage.insert(path, filenameItem);
 
             path = path.mid(0, path.mid(0, path.size() - 1).lastIndexOf('/') + 1);
         } else {
             (*pos)->appendRow(childRow);
             break;
         }
-    } while ((slash = path.lastIndexOf('/')) != -1);
+    } while ((slashOffset = path.lastIndexOf('/')) != -1);
 }
 
 static void calculateSizeRecursively(QStandardItem *filenameCell, QStandardItem *sizeCell)
@@ -131,17 +137,18 @@ TorrentFilesystemModel::TorrentFilesystemModel(
     QHash<QString, QStandardItem *> files;
 
     files.reserve(model.fileList().size() * 2);
-    files["/"] = this->invisibleRootItem();
+    files["/"] = invisibleRootItem();
 
     FileIconProvider iconProvider;
 
-    for (auto file = model.fileList().begin(); file != model.fileList().end(); ++file)
-        insertFile(files, iconProvider, *file);
+    for (size_t fileOffset = 0; fileOffset < model.fileList().size(); ++fileOffset) {
+        insertFile(files, iconProvider, model, fileOffset);
+    }
 
-    selectedSize_ = calculateFolderSizes(this->invisibleRootItem());
+    totalDownloadSize_ = calculateFolderSizes(this->invisibleRootItem());
 
-    this->setHeaderData(0, Qt::Horizontal, QObject::tr("Name"));
-    this->setHeaderData(1, Qt::Horizontal, QObject::tr("Size"));
+    setHeaderData(0, Qt::Horizontal, QObject::tr("Name"));
+    setHeaderData(1, Qt::Horizontal, QObject::tr("Size"));
 }
 
 void TorrentFilesystemModel::updateCheckStateUpwards(QStandardItem *me)
@@ -192,17 +199,17 @@ void TorrentFilesystemModel::updateCheckStateDownwards(QStandardItem *me, Qt::Ch
     //if (me->checkState() == state)
     //    return;
 
-    // If the given item is a leaf node (a file) then the selected
-    // size field need to be updated
+    // If the given item is a leaf node (a file) then the total download
+    // size needs to be updated.
     if (!me->hasChildren()) {
         QStandardItem *size = this->itemFromIndex(me->index().sibling(me->index().row(), 1));
 
         switch (state) {
         case Qt::Checked:
-            selectedSize_ += size->data().toULongLong();
+            totalDownloadSize_ += size->data().toULongLong();
             break;
         case Qt::Unchecked:
-            selectedSize_ -= size->data().toULongLong();
+            totalDownloadSize_ -= size->data().toULongLong();
             break;
         default:
             hWarning() << "Tri-state selection (or whatever) is not implemented";
@@ -216,32 +223,32 @@ void TorrentFilesystemModel::updateCheckStateDownwards(QStandardItem *me, Qt::Ch
         updateCheckStateDownwards(me->child(row), state);
 }
 
-static void enumSelectedFilesHelper(const QStandardItem *item, QVector<QString> &accumulator)
+static void enumSelectedFilesHelper(const QStandardItem *item, std::set<size_t> &accumulator)
 {
     for (unsigned int row = 0; item->child(row) != 0; ++row) {
         QStandardItem *child = item->child(row);
 
         if (!child->hasChildren()) {
             if (child->checkState() == Qt::Checked)
-                accumulator.push_back(child->data().toString());
+                accumulator.insert(child->data().toUInt());
         } else {
             enumSelectedFilesHelper(child, accumulator);
         }
     }
 }
 
-QVector<QString> TorrentFilesystemModel::enumSelectedFiles() const
+std::set<size_t> TorrentFilesystemModel::enumUnmaskedFiles() const
 {
-    QVector<QString> selectedFiles;
+    std::set<size_t> unmaskedFiles;
 
-    enumSelectedFilesHelper(invisibleRootItem(), selectedFiles);
+    enumSelectedFilesHelper(invisibleRootItem(), unmaskedFiles);
 
-    return selectedFiles;
+    return std::move(unmaskedFiles);
 }
 
 unsigned long long TorrentFilesystemModel::selectedSize() const
 {
-    return selectedSize_;
+    return totalDownloadSize_;
 }
 
 bool TorrentFilesystemModel::setData(const QModelIndex &index, const QVariant &value, int role)
@@ -252,13 +259,13 @@ bool TorrentFilesystemModel::setData(const QModelIndex &index, const QVariant &v
         if (item->data(role) == value)
             return true;
 
-        unsigned long long prevSelectedSize = selectedSize_;
+        unsigned long long prevSelectedSize = totalDownloadSize_;
 
         updateCheckStateDownwards(item, Qt::CheckState(value.toInt()));
         updateCheckStateUpwards(item->parent());
 
-        if (prevSelectedSize != selectedSize_)
-            onDownloadAmountChanged(selectedSize_);
+        if (prevSelectedSize != totalDownloadSize_)
+            onDownloadAmountChanged(totalDownloadSize_);
 
         return true;
     }
@@ -268,24 +275,24 @@ bool TorrentFilesystemModel::setData(const QModelIndex &index, const QVariant &v
 
 void TorrentFilesystemModel::checkAll()
 {
-    unsigned long long prevSize = selectedSize_;
+    unsigned long long prevSize = totalDownloadSize_;
 
     //invisibleRootItem()->setCheckState(Qt::Checked);
 
     updateCheckStateDownwards(invisibleRootItem(), Qt::Checked);
 
-    if (prevSize != selectedSize_)
-        onDownloadAmountChanged(selectedSize_);
+    if (prevSize != totalDownloadSize_)
+        onDownloadAmountChanged(totalDownloadSize_);
 }
 
 void TorrentFilesystemModel::uncheckAll()
 {
-    unsigned long long prevSize = selectedSize_;
+    unsigned long long prevSize = totalDownloadSize_;
 
     //invisibleRootItem()->setCheckState(Qt::Unchecked);
 
     updateCheckStateDownwards(invisibleRootItem(), Qt::Unchecked);
 
-    if (prevSize != selectedSize_)
-        onDownloadAmountChanged(selectedSize_);
+    if (prevSize != totalDownloadSize_)
+        onDownloadAmountChanged(totalDownloadSize_);
 }
