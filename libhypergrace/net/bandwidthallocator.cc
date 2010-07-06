@@ -18,17 +18,14 @@
    Fifth Floor, Boston, MA 02110-1301, USA.
 */
 
-#include <algorithm>
-#include <limits>
-
 #include "bandwidthallocator.hh"
 
 using namespace Hypergrace::Net;
 
 
 BandwidthAllocator::BandwidthAllocator() :
-    tokens_(std::numeric_limits<int>::max() / 2),
-    tokenMax_(std::numeric_limits<int>::max() / 2)
+    tokens_(-1),
+    maxTokens_(-1)
 {
 }
 
@@ -38,38 +35,50 @@ BandwidthAllocator::~BandwidthAllocator()
 
 void BandwidthAllocator::limit(int limit)
 {
-    tokenMax_ = limit;
-
-    if (tokens_ > limit)
-        tokens_ = limit;
+    maxTokens_ = limit;
+    renew();
 }
 
 int BandwidthAllocator::allocate(int size)
 {
-    int expected = tokens_;
-    int alloc;
+    int maxTokens = maxTokens_;
 
-    do {
-        alloc = (expected >= size) ? size : expected;
-    } while (!tokens_.compare_exchange_weak(expected, expected - alloc));
+    if (maxTokens > 0) {
+        int expected = tokens_;
+        int alloc;
 
-    return alloc;
+        do {
+            alloc = (expected >= size) ? size : expected;
+        } while (!tokens_.compare_exchange_weak(expected, expected - alloc));
+
+        return alloc;
+    } else if (maxTokens == 0) {
+        return 0;
+    } else {
+        return size;
+    }
 }
 
 void BandwidthAllocator::release(int size)
 {
-    int expected = tokens_;
-    int _new;
+    while (true) {
+        int expected = tokens_;
+        int maxTokens = maxTokens_;
+        int newValue = (expected + size <= maxTokens) ? expected + size : maxTokens;
 
-    do {
-        // FIXME: Not really thread-safe.
-        int currentLimit = tokenMax_;
-
-        _new = (expected + size <= currentLimit) ? expected + size : currentLimit;
-    } while (!tokens_.compare_exchange_weak(expected, _new));
+        if (tokens_.compare_exchange_weak(expected, newValue)) {
+            break;
+        }
+    }
 }
 
 void BandwidthAllocator::renew()
 {
-    tokens_ = (int)tokenMax_;
+    while (true) {
+        int expected = tokens_;
+
+        if (tokens_.compare_exchange_weak(expected, maxTokens_)) {
+            break;
+        }
+    }
 }

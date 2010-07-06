@@ -42,7 +42,7 @@ public:
 
 private:
     std::atomic<int> tokens_;
-    std::atomic<int> tokenMax_;
+    std::atomic<int> maxTokens_;
 };
 
 } /* namespace Net */
