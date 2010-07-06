@@ -68,7 +68,7 @@ GlobalTorrentRegistry::GlobalTorrentRegistry() :
 
     peerId_ = Util::Sha1Hash::oneshot((const char *)&n, sizeof(n));
 
-    // FIXME: Version number is hardcoded
+    // FIXME: Version number is hardcoded.
     peerId_[0] = '-'; peerId_[1] = 'H'; peerId_[2] = 'G'; peerId_[7] = '-';
     peerId_[3] = '0'; peerId_[4] = '0'; peerId_[5] = '1'; peerId_[6] = '0';
 }
@@ -93,8 +93,14 @@ bool GlobalTorrentRegistry::createTorrent(TorrentBundle *bundle)
 
     const std::string &torrentName = bundle->model().name();
 
+    // Refill tracker registry if it's still empty. This is usually
+    // a case for new torrents.
     if (bundle->state().trackerRegistry().tiers()->empty()) {
-        populateTrackerRegistry(*bundle);
+        if (!bundle->model().announceList().empty())
+            populateTrackerRegistryFromAnnounceList(*bundle);
+        else
+            populateTrackerRegistryFromAnnounceUrl(*bundle);
+
         hcDebug(torrentName) << "Restored torrent registry from the original announce list";
     } else {
         hcDebug(torrentName) << "Restored torrent registry from the previous session data";
@@ -118,14 +124,13 @@ void GlobalTorrentRegistry::deleteTorrent(TorrentBundle *bundle)
     auto torrentIt = torrents_.find(bundle);
 
     if (torrentIt == torrents_.end()) {
-        hDebug() << "Failed to delete torrent because doesn't exist in the torrent registry";
+        hDebug() << "Failed to delete torrent because it doesn't exist in the torrent registry";
         return;
     }
 
     stopTorrent(bundle);
 
     Torrent &torrent = (*torrentIt).second;
-
     torrent.reactor->stop();
 
     // We don't need to delete CommandTask explicitly because reactor
@@ -155,7 +160,7 @@ bool GlobalTorrentRegistry::startTorrent(TorrentBundle *bundle)
     Torrent &torrent = (*torrentIt).second;
 
     if (torrent.reactor->running()) {
-        hSevere() << "Torrent is already running";
+        hSevere() << "Torrent has already been started";
         return false;
     }
 
@@ -307,49 +312,49 @@ GlobalTorrentRegistry *GlobalTorrentRegistry::self()
     return &instance;
 }
 
-void GlobalTorrentRegistry::populateTrackerRegistry(TorrentBundle &bundle)
+void GlobalTorrentRegistry::populateTrackerRegistryFromAnnounceList(TorrentBundle &bundle)
 {
     const AnnounceList &announceList = bundle.model().announceList();
+    unsigned trackerCount = 0;
 
     TierList tiers;
 
-    if (!announceList.empty()) {
-        unsigned trackerCount = 0;
+    tiers.reserve(announceList.size());
 
-        tiers.reserve(announceList.size());
+    for (auto tier = announceList.begin(); tier != announceList.end(); ++tier) {
+        tiers.resize(tiers.size() + 1);
+        tiers.back().reserve((*tier).size());
 
-        for (auto tier = announceList.begin(); tier != announceList.end(); ++tier) {
-            tiers.resize(tiers.size() + 1);
-            tiers.back().reserve((*tier).size());
+        for (auto uri = (*tier).begin(); uri != (*tier).end(); ++uri) {
+            Http::Uri uriTest(*uri);
 
-            for (auto uri = (*tier).begin(); uri != (*tier).end(); ++uri) {
-                Http::Uri uriTest(*uri);
-
-                if (!uriTest.valid()) {
-                    hDebug() << "Tracker URI is invalid; Tracker" << *uri << "will be ignored";
-                    continue;
-                } else if (uriTest.scheme() != "http") {
-                    hDebug() << "URI scheme" << uriTest.scheme() << "is not supported;"
-                             << "Tracker" << *uri << "will be ignored";
-                    continue;
-                }
-
+            if (!uriTest.valid()) {
+                hDebug() << "Tracker's URI is invalid; Tracker" << *uri << "will be ignored";
+            } else if (uriTest.scheme() != "http") {
+                hDebug() << "URI scheme" << uriTest.scheme() << "is not supported;"
+                         << "Tracker" << *uri << "will be ignored";
+            } else {
                 tiers.back().push_back(std::make_shared<Tracker>(bundle, *uri));
             }
-
-            trackerCount += (*tier).size();
         }
 
-        hcDebug(bundle.model().name()) << "Found" << trackerCount << "trackers in"
-                                       << tiers.size() << "tiers";
-    } else {
-        std::shared_ptr<Tracker> tracker(new Tracker(bundle, bundle.model().announceUri()));
-
-        tiers.resize(1);
-        tiers[0].push_back(tracker);
-
-        hcDebug(bundle.model().name()) << "Found 1 tracker; Announce list doesn't exist";
+        trackerCount += (*tier).size();
     }
+
+    hcDebug(bundle.model().name()) << "Found" << trackerCount << "trackers in"
+                                   << tiers.size() << "tiers";
+
+    bundle.state().trackerRegistry().replaceTiers(tiers);
+}
+
+void GlobalTorrentRegistry::populateTrackerRegistryFromAnnounceUrl(TorrentBundle &bundle)
+{
+    TierList tiers;
+
+    tiers.resize(1);
+    tiers.back().push_back(std::make_shared<Tracker>(bundle, bundle.model().announceUri()));
+
+    hcDebug(bundle.model().name()) << "Found 1 tracker; Announce list doesn't exist";
 
     bundle.state().trackerRegistry().replaceTiers(tiers);
 }

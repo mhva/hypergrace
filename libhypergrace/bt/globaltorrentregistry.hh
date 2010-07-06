@@ -70,8 +70,8 @@ public:
     static GlobalTorrentRegistry *self();
 
 private:
-    bool allocateFiles();
-    void populateTrackerRegistry(TorrentBundle &);
+    void populateTrackerRegistryFromAnnounceList(TorrentBundle &);
+    void populateTrackerRegistryFromAnnounceUrl(TorrentBundle &);
 
 private:
     struct Torrent {
