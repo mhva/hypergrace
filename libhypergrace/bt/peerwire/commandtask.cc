@@ -157,6 +157,9 @@ public:
     void resetScheduledPiecesMask(const std::set<size_t> &unmaskedFiles)
     {
         const auto &files = bundle_.model().fileList();
+        const unsigned int pieceCount = bundle_.model().pieceCount();
+        const unsigned int pieceSize = bundle_.model().pieceSize();
+        const unsigned int lastPieceSize = bundle_.model().lastPieceSize();
 
         unsigned int piece = 0;
         unsigned int edgeOffset = 0;
@@ -164,36 +167,19 @@ public:
 
         for (size_t fileIndex = 0; fileIndex < files.size(); ++fileIndex) {
             const FileDescriptor &file = files[fileIndex];
-            bool unmaskCurrentFile;
 
-            if (unmaskedFiles.find(fileIndex) != unmaskedFiles.end()) {
-                unmaskCurrentFile = true;
-
-                // Don't unmask piece if the zero-sized file has been
-                // unmasked. This helps us to conserve bandiwdth on
-                // pieces where user has unmasked only empty files.
-                if (file.size > 0)
-                    ++filesUnmaskedOnEdge;
-            } else {
-                unmaskCurrentFile = false;
-            }
-
-            if (file.size == 0)
+            if (file.size == 0) {
                 continue;
-
-            unsigned int pieceSize;
-
-            if (piece != bundle_.model().pieceCount() - 1) {
-                pieceSize = bundle_.model().pieceSize();
-            } else {
-                unsigned int modulo = bundle_.model().torrentSize() % bundle_.model().pieceSize();
-                pieceSize = modulo > 0 ? modulo : bundle_.model().pieceSize();
             }
 
-            if (file.size + edgeOffset >= pieceSize) {
-                // Unmask the piece on the left edge of the current
-                // file if it contains a part of at least one file
-                // that should be unmasked.
+            bool unmaskThisFile = unmaskedFiles.find(fileIndex) != unmaskedFiles.end();
+            unsigned int currentPieceSize = (piece != pieceCount - 1) ? pieceSize : lastPieceSize;
+
+            filesUnmaskedOnEdge += unmaskThisFile;
+
+            if (file.size + edgeOffset >= currentPieceSize) {
+                // Unmask piece on the left edge if it contains a part
+                // of at least one file that should be unmasked.
                 if (filesUnmaskedOnEdge > 0) {
                     bundle_.state().markPieceAsInteresting(piece);
                 } else {
@@ -204,43 +190,42 @@ public:
 
                 // Proceed to the next file if this file fully fits in
                 // the one piece.
-                if (file.size + edgeOffset == pieceSize) {
+                if (file.size + edgeOffset == currentPieceSize) {
                     edgeOffset = 0;
                     continue;
                 }
 
-                unsigned long long alignedSize = file.size - (pieceSize - edgeOffset);
-                unsigned int limit = piece + alignedSize / pieceSize;
+                unsigned long long alignedSize = file.size - (currentPieceSize - edgeOffset);
+                unsigned int limit = piece + alignedSize / currentPieceSize;
 
-                assert(limit <= bundle_.model().pieceCount());
+                assert(limit <= pieceCount);
 
                 // Mask/Unmask all full-sized pieces that the current
                 // file covers.
                 for (; piece < limit; ++piece) {
-                    if (unmaskCurrentFile) {
+                    if (unmaskThisFile) {
                         bundle_.state().markPieceAsInteresting(piece);
                     } else {
                         bundle_.state().markPieceAsUninteresting(piece);
                     }
                 }
 
-                edgeOffset = alignedSize % pieceSize;
+                edgeOffset = alignedSize % currentPieceSize;
 
                 // Torrent's last piece might never be [un]masked if
                 // there're no files behind the current one. [Un]mask
                 // the last piece of the current file preemptively.
-                if (edgeOffset > 0 && piece < bundle_.model().pieceCount()) {
-                    if (unmaskCurrentFile) {
+                if (edgeOffset > 0 && piece < pieceCount) {
+                    if (unmaskThisFile) {
                         bundle_.state().markPieceAsInteresting(piece);
                     } else {
                         bundle_.state().markPieceAsUninteresting(piece);
                     }
                 }
 
-                filesUnmaskedOnEdge = (edgeOffset > 0 && unmaskCurrentFile) ? 1 : 0;
+                filesUnmaskedOnEdge = (edgeOffset > 0 && unmaskThisFile) ? 1 : 0;
             } else {
-                // The file fits in the current piece.
-                continue;
+                // The file fully fits in the current piece.
             }
         }
     }
@@ -262,7 +247,7 @@ public:
 public:
     void resetAllocators()
     {
-        // Update the rate limit of both local allocators.
+        // Update the rate limit on both local allocators.
         if (bundle_.configuration().downloadRateLimit() >= 0)
             localDownloadAllocator_.limit(bundle_.configuration().downloadRateLimit());
 
@@ -396,8 +381,6 @@ public:
     void notifyVerifySuccess(unsigned int piece)
     {
         std::lock_guard<std::mutex> l(anchor_);
-
-        hDebug() << "Piece" << piece << "is okay!";
         ioResults_.push_back(FlushResult { piece, FlushResult::Success });
     }
 
