@@ -51,6 +51,7 @@ public:
     long long creationDate() const;
     unsigned int pieceCount() const;
     unsigned int pieceSize() const;
+    unsigned int lastPieceSize() const;
     Util::Sha1Hash::Hash pieceHash(unsigned int) const;
 
     unsigned long long torrentSize() const;

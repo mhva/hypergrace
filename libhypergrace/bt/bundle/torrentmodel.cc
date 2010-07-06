@@ -194,6 +194,14 @@ unsigned int TorrentModel::pieceSize() const
     return Bencode::Path(metadata_, "info", "piece length").resolve<Bencode::Integer>();
 }
 
+unsigned int TorrentModel::lastPieceSize() const
+{
+    unsigned int normalSize = pieceSize();
+    unsigned int modulo = torrentSize() % normalSize;
+
+    return modulo > 0 ? modulo : normalSize;
+}
+
 Util::Sha1Hash::Hash TorrentModel::pieceHash(unsigned int piece) const
 {
     Util::Sha1Hash::Hash hash;
