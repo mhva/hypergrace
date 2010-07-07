@@ -23,6 +23,7 @@
 
 #include <deque>
 #include <string>
+#include <utility>
 
 #include <delegate/delegate.hh>
 #include <delegate/signal.hh>
@@ -53,10 +54,8 @@ public:
     virtual ssize_t send(const char *, size_t) = 0;
     virtual ssize_t receive(std::string &, size_t) = 0;
 
-    void setLocalDownloadAllocator(BandwidthAllocator *);
-    void setLocalUploadAllocator(BandwidthAllocator *);
-    void setGlobalDownloadAllocator(BandwidthAllocator *);
-    void setGlobalUploadAllocator(BandwidthAllocator *);
+    void setLocalBandwidthAllocators(BandwidthAllocator *, BandwidthAllocator *);
+    void setGlobalBandwidthAllocators(BandwidthAllocator *, BandwidthAllocator *);
 
     void setInputMiddleware(Net::InputMiddleware::Pointer);
     void setOutputMiddleware(Net::OutputMiddleware::Pointer);

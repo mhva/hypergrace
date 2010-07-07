@@ -71,24 +71,16 @@ void Socket::send(Packet *packet)
     packetQueue_.push_back(packet);
 }
 
-void Socket::setLocalDownloadAllocator(BandwidthAllocator *allocator)
+void Socket::setLocalBandwidthAllocators(BandwidthAllocator *dl, BandwidthAllocator *ul)
 {
-    localDownloadAllocator_ = allocator;
+    localDownloadAllocator_ = dl;
+    localUploadAllocator_ = ul;
 }
 
-void Socket::setLocalUploadAllocator(BandwidthAllocator *allocator)
+void Socket::setGlobalBandwidthAllocators(BandwidthAllocator *dl, BandwidthAllocator *ul)
 {
-    localUploadAllocator_ = allocator;
-}
-
-void Socket::setGlobalDownloadAllocator(BandwidthAllocator *allocator)
-{
-    globalDownloadAllocator_ = allocator;
-}
-
-void Socket::setGlobalUploadAllocator(BandwidthAllocator *allocator)
-{
-    globalUploadAllocator_ = allocator;
+    globalDownloadAllocator_ = dl;
+    globalUploadAllocator_ = ul;
 }
 
 void Socket::setInputMiddleware(Net::InputMiddleware::Pointer input)
@@ -142,8 +134,7 @@ bool Socket::closed() const
 
 int Socket::allocateBandwidth(BandwidthAllocator *local, BandwidthAllocator *global, int size)
 {
-    // First try to allocate from the local bandwidth allocator because
-    // it's most likely the first one to run out of free bandwidth.
+    // First try to allocate from the local bandwidth allocator.
     int allocatedNow = 0;
 
     if (local != 0) {
@@ -161,8 +152,7 @@ int Socket::allocateBandwidth(BandwidthAllocator *local, BandwidthAllocator *glo
 
     // If we have successfully allocated at least one byte from the
     // local allocator and the global allocator is present we should
-    // try to allocate from the global allocator the same amount of
-    // bandwidth.
+    // request the same amount of bandwidth from the global allocator.
     int globallyAllocated = global->allocate(allocatedNow);
 
     if (globallyAllocated == allocatedNow) {
