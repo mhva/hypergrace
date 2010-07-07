@@ -72,7 +72,7 @@ public:
         interestTask_(bundle),
         downloadTask_(downloadTask),
         uploadTask_(uploadTask),
-        resetAllocators_(true),
+        resetRateLimits_(true),
         resetScheduledPiecesMask_(true)
     {
         reactor_.setDownloadRateAccumulator(&downloadRate_);
@@ -115,10 +115,10 @@ public:
         Net::InputMiddleware::Pointer inputFirst(new MessageAssembler(inputSecond));
         Net::OutputMiddleware::Pointer outputFirst(inputSecond, peerDataCollector);
 
+        socket->setLocalBandwidthAllocators(&localDownloadAllocator_, &localUploadAllocator_);
+        socket->setGlobalBandwidthAllocators(&globalDownloadAllocator_, &globalUploadAllocator_);
         socket->setInputMiddleware(inputFirst);
         socket->setOutputMiddleware(outputFirst);
-
-        resetSocketAllocators(*socket);
 
         reactor_.observe(socket);
 
@@ -245,48 +245,6 @@ public:
     }
 
 public:
-    void resetAllocators()
-    {
-        // Update the rate limit on both local allocators.
-        if (bundle_.configuration().downloadRateLimit() >= 0)
-            localDownloadAllocator_.limit(bundle_.configuration().downloadRateLimit());
-
-        if (bundle_.configuration().uploadRateLimit() >= 0)
-            localUploadAllocator_.limit(bundle_.configuration().uploadRateLimit());
-
-        // Reset allocators on all sockets.
-        const InternalPeerList &peers = bundle_.state().peerRegistry().internalPeerList();
-
-        std::for_each(
-            peers.begin(), peers.end(),
-            [this](PeerData *p) { this->resetSocketAllocators(p->socket()); }
-        );
-    }
-
-    void resetSocketAllocators(Net::Socket &socket)
-    {
-        if (bundle_.configuration().downloadRateLimit() >= 0)
-            socket.setLocalDownloadAllocator(&localDownloadAllocator_);
-        else
-            socket.setLocalDownloadAllocator(0);
-
-        if (bundle_.configuration().uploadRateLimit() >= 0)
-            socket.setLocalUploadAllocator(&localUploadAllocator_);
-        else
-            socket.setLocalUploadAllocator(0);
-
-        if (GlobalTorrentRegistry::self()->downloadRateLimit() >= 0)
-            socket.setGlobalDownloadAllocator(&globalDownloadAllocator_);
-        else
-            socket.setGlobalDownloadAllocator(0);
-
-        if (GlobalTorrentRegistry::self()->uploadRateLimit() >= 0)
-            socket.setGlobalUploadAllocator(&globalUploadAllocator_);
-        else
-            socket.setGlobalUploadAllocator(0);
-    }
-
-public:
     template<typename T> void serializeBundlePart(const std::string &filename, const T &object)
     {
         ioThread_->writeData(bundle_.bundleDirectory() + "/" + filename, 0, object.toString(),
@@ -410,7 +368,7 @@ public:
     Net::RateAccumulator downloadRate_;
     Net::RateAccumulator uploadRate_;
 
-    volatile bool resetAllocators_;
+    volatile bool resetRateLimits_;
     volatile bool resetScheduledPiecesMask_;
 
     std::deque<FlushResult> ioResults_;
@@ -441,7 +399,7 @@ void CommandTask::notifyRateLimitChanged()
 {
     std::lock_guard<std::mutex> l(d->anchor_);
 
-    d->resetAllocators_ = true;
+    d->resetRateLimits_ = true;
 }
 
 void CommandTask::notifyFileMaskChanged()
@@ -466,10 +424,12 @@ void CommandTask::execute()
     d->bundle_.state().setDownloadRate(d->downloadRate_.reset());
     d->bundle_.state().setUploadRate(d->uploadRate_.reset());
 
-    // Reset allocators if rate has been changed.
-    if (d->resetAllocators_) {
-        d->resetAllocators();
-        d->resetAllocators_ = false;
+    // Reset bandwidth rate limits on local allocators if limits has
+    // been changed.
+    if (d->resetRateLimits_) {
+        d->localDownloadAllocator_.limit(d->bundle_.configuration().downloadRateLimit());
+        d->localUploadAllocator_.limit(d->bundle_.configuration().uploadRateLimit());
+        d->resetRateLimits_ = false;
     }
 
     // Update the scheduled pieces mask if the unmasked file set has
