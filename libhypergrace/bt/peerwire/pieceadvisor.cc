@@ -147,7 +147,7 @@ void PieceAdvisor::refillCache()
         std::partial_sort_copy(
                 downloadablePieces.begin(), downloadablePieces.end(),
                 cache_.begin(), cache_.end(),
-                [&references_](size_t l, size_t r) { return references_[l] < references_[r]; }
+                [this](size_t l, size_t r) { return references_[l] < references_[r]; }
         );
     } else {
         cache_ = std::move(downloadablePieces);

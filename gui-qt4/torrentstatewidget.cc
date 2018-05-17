@@ -19,6 +19,7 @@
 */
 
 #include <algorithm>
+#include <numeric>
 
 #include <QDebug>
 #include <QColor>
@@ -202,7 +203,7 @@ void TorrentStateWidget::updateDisplay()
     unsigned int pieceSize = model.pieceSize();
     unsigned long long torrentSize = model.torrentSize();
 
-    size_t goal = schedPieces.enabledCount() + availPieces.enabledCount();
+    int goal = schedPieces.enabledCount() + availPieces.enabledCount();
 
     if (progress_->maximum() != goal) {
         progress_->setMinimum(0);

@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2009 Anton Mihalyov <anton@glyphsense.com>
+   Copyright (C) 2010 Anton Mihalyov <anton@glyphsense.com>
 
    This  library is  free software;  you can  redistribute it  and/or
    modify  it under  the  terms  of the  GNU  Library General  Public
@@ -18,25 +18,54 @@
    Fifth Floor, Boston, MA 02110-1301, USA.
 */
 
-#ifndef NET_TCPCONNECTION_HH_
-#define NET_TCPCONNECTION_HH_
+#ifndef NET_POLL_HH_
+#define NET_POLL_HH_
 
-#include <string>
-#include <net/socket.hh>
+#if defined(HG_WINDOWS)
+#   include <Windows.h>
+#   define HG_POLLFD WSAPOLLFD
+#else
+#   include <poll.h>
+#   define HG_POLLFD pollfd
+#endif
+
+#include <hg/net/poll.hh>
+#include <hg/config.hh>
 
 namespace Hypergrace {
 namespace Net {
 
-class TcpSocket : public Socket
-{
+class PollImpl {
 public:
-    TcpSocket(int, const HostAddress &);
+    enum class Event : short int {
+        In  = POLLIN,
+        Out = POLLOUT,
+        Hup = POLLHUP,
+        Err = POLLERR,
+        Pri = POLLPRI
+    };
 
-    ssize_t send(const char *, size_t);
-    ssize_t receive(std::string &, size_t);
+    PollImpl();
+    ~PollImpl();
+
+    void add(Socket *, short int events);
+    void remove(Socket *);
+
+    int poll(int timeout);
+
+protected:
+    virtual void handle(Socket *, short int events) = 0;
+
+private:
+    HG_POLLFD *pfds_;
+    Socket *sockets_;
+    size_t fdCount_;
+    size_t fdMax_;
 };
 
 } /* namespace Net */
 } /* namespace Hypergrace */
 
-#endif /* NET_TCPCONNECTION_HH_ */
+#undef HG_POLLFD
+
+#endif /* NET_POLL_HH_ */

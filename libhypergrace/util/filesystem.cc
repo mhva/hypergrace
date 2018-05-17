@@ -50,7 +50,6 @@ bool FileSystem::createPath(const std::string &path, int mode)
         return false;
     }
 
-    auto it = subpathList.begin();
     auto end = (path[path.size() - 1] != '/') ? subpathList.end() - 1 : subpathList.end();
 
     std::string currentPath;

@@ -91,7 +91,7 @@ bool GlobalTorrentRegistry::createTorrent(TorrentBundle *bundle)
         }
     }
 
-    const std::string &torrentName = bundle->model().name();
+    //const std::string &torrentName = bundle->model().name();
 
     // Refill tracker registry if it's still empty. This is usually
     // a case for new torrents.

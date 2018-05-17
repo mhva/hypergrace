@@ -607,7 +607,7 @@ private:
             for (auto request = dataToWrite.begin(); request != dataToWrite.end(); ++request)
                 satisfyRequest(*request);
 
-            // Close files that we haven't accessed for some time
+            // Close files that we haven't accessed for a long time.
             if (lastCleanupTime_ >= Util::Time(0, 0, 30)) {
                 closeOld();
                 lastCleanupTime_ = Util::Time::monotonicTime();

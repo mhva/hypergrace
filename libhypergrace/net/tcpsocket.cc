@@ -18,6 +18,9 @@
    Fifth Floor, Boston, MA 02110-1301, USA.
 */
 
+#include <fcntl.h>
+#include <netdb.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 
@@ -25,8 +28,16 @@
 
 #include <algorithm>
 #include <cassert>
+#include <sstream>
 
 #include <debug/debug.hh>
+
+#include <net/socket.hh>
+#include <net/hostaddress.hh>
+#include <net/inputmiddleware.hh>
+#include <net/outputmiddleware.hh>
+#include <net/packet.hh>
+#include <net/reactor.hh>
 
 #include "tcpsocket.hh"
 

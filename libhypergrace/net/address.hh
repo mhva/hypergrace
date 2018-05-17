@@ -18,43 +18,48 @@
    Fifth Floor, Boston, MA 02110-1301, USA.
 */
 
-#ifndef NET_PACKET_HH_
-#define NET_PACKET_HH_
+#ifndef NET_HOSTADDRESS_HH_
+#define NET_HOSTADDRESS_HH_
 
 #include <string>
-#include <delegate/delegate.hh>
+#include <netinet/in.h>
+
+namespace Hypergrace { namespace Debug { class Debug; }}
+namespace Hypergrace { namespace Net { class Socket; }}
 
 namespace Hypergrace {
 namespace Net {
 
-class Packet
+class Address
 {
 public:
-    Packet();
-    virtual ~Packet() = default;
+    typedef Delegate::Delegate<void (Socket *)> TcpConnectHandler;
 
-    void discard();
-    bool discarded() const;
+    Address(const std::string &host, const std::string &service, sockaddr *);
+    Address(const Address &) = delete;
 
-    void setPacketClass(int);
-    void setPacketId(int);
+    const std::string &host() const;
+    const std::string &service() const;
 
-    int packetClass() const;
-    int packetId() const;
+    void connectTcp(Net::Reactor &, const TcpConnectHandler &);
 
-    virtual std::string serialize() const = 0;
+    bool operator <(const Address &) const;
+    bool operator >(const Address &) const;
+    bool operator ==(const Address &) const;
+    bool operator !=(const Address &) const;
 
-public:
-    Delegate::Delegate<> onSent;
+    void operator =(const Address &) = delete;
 
 private:
-    int packetClass_;
-    int packetId_;
-
-    bool discarded_;
+    std::string host_;
+    std::string service_;
+    sockaddr *sa_;
 };
 
 } /* namespace Net */
 } /* namespace Hypergrace */
 
-#endif /* NET_PACKET_HH_ */
+Hypergrace::Debug::Debug &operator <<(Hypergrace::Debug::Debug &,
+                                      const Hypergrace::Net::Address &);
+
+#endif /* NET_HOSTADDRESS_HH_ */

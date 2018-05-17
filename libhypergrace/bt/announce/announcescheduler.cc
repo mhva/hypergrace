@@ -89,8 +89,7 @@ void AnnounceScheduler::execute()
 
                 // Insert tracker's URI into the set to indicate that
                 // we initiated announce on this tracker
-                auto result = announcingTrackers_.insert((*tracker)->uri());
-
+                announcingTrackers_.insert((*tracker)->uri());
                 hasAnnouncingTrackers = true;
             }
         }

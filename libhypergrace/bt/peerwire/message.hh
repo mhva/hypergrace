@@ -53,9 +53,8 @@ public:
     enum { id = MessageId_ };
 
 public:
-    Message()
-    {
-    }
+    Message() = default;
+    virtual ~Message() = default;
 
     Message(const typename Matchers::ValueType &... args)
         : BaseClass(0, MessageId_, args...)
@@ -89,6 +88,8 @@ public:
         this->setPacketClass(BitTorrentPacketClass);
         this->setPacketId(MessageId_);
     }
+
+    virtual ~Message() = default;
 };
 
 class HandshakeMessage
@@ -120,6 +121,8 @@ public:
                   std::string(8, 0), hash, peerId)
     {
     }
+
+    virtual ~HandshakeMessage() = default;
 
 private:
     HandshakeMessage(const BaseClass::TupleType &tuple) : BaseClass(tuple) {}

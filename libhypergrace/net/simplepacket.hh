@@ -333,9 +333,7 @@ public:
     typedef std::tuple<Matchers...> TupleType;
 
 public:
-    SimplePacket()
-    {
-    }
+    SimplePacket() = default;
 
     SimplePacket(const typename Matchers::ValueType &... initializers)
         : fields_(initializers...)
@@ -346,6 +344,8 @@ public:
     SimplePacket(const Tuple &initializers) : fields_(initializers)
     {
     }
+
+    virtual ~SimplePacket() = default;
 
 public:
     inline std::string serialize() const

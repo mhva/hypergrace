@@ -48,7 +48,8 @@ Socket::Socket(int socket, const HostAddress &host) :
     globalUploadAllocator_(0),
     closed_(false),
     pendingData_(),
-    pendingOffset_(0)
+    pendingOffset_(0),
+    data_(0)
 {
     assert(socket_ != -1);
 }

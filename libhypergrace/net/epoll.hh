@@ -1,5 +1,5 @@
 /*
-   Copyright (C) 2009 Anton Mihalyov <anton@glyphsense.com>
+   Copyright (C) 2010 Anton Mihalyov <anton@glyphsense.com>
 
    This  library is  free software;  you can  redistribute it  and/or
    modify  it under  the  terms  of the  GNU  Library General  Public
@@ -18,25 +18,45 @@
    Fifth Floor, Boston, MA 02110-1301, USA.
 */
 
-#ifndef NET_TCPCONNECTION_HH_
-#define NET_TCPCONNECTION_HH_
+#ifndef NET_EPOLL_HH_
+#define NET_EPOLL_HH_
 
-#include <string>
-#include <net/socket.hh>
+#include <sys/epoll.h>
+
+#include <system_error>
 
 namespace Hypergrace {
 namespace Net {
 
-class TcpSocket : public Socket
-{
+class EpollImpl {
 public:
-    TcpSocket(int, const HostAddress &);
+    enum : short int {
+        In  = EPOLLIN,
+        Out = EPOLLOUT,
+        Hup = EPOLLHUP | EPOLLRDHUP,
+        Err = EPOLLERR,
+        Pri = EPOLLPRI
+    };
 
-    ssize_t send(const char *, size_t);
-    ssize_t receive(std::string &, size_t);
+    Epoll();
+    ~Epoll();
+
+    void add(Socket *, short int events);
+    void remove(Socket *);
+
+    std::error_code poll(int timeout);
+
+protected:
+    virtual void handle(Socket *, short int events) = 0;
+
+private:
+    int epfd_;
+    epoll_event *events_;
+    size_t fdCount_;
+    size_t fdMax_;
 };
 
 } /* namespace Net */
 } /* namespace Hypergrace */
 
-#endif /* NET_TCPCONNECTION_HH_ */
+#endif /* NET_EPOLL_HH_ */

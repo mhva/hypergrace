@@ -57,7 +57,7 @@ public:
         for (auto it = connections_.begin(); it != connections_.end(); ++it) {
             ConnectionDescriptor &descriptor = *it;
             if (descriptor.liveness)
-                descriptor.liveness = false;
+                *descriptor.liveness = false;
             else
                 delete descriptor.liveness;
         }

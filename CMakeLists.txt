@@ -8,7 +8,7 @@ project(hypergrace)
 #enable_testing(true)
 
 # Ninja linking -lrt
-set(CMAKE_CXX_FLAGS "-std=c++0x -pthread -lrt -fstrict-aliasing -Wall -Wstrict-aliasing=2")
+set(CMAKE_CXX_FLAGS "-std=c++0x -pthread -lrt -fstrict-aliasing -Wall -Wstrict-aliasing=2 -Wno-unused-local-typedefs")
 add_definitions(-D_FILE_OFFSET_BITS=64)
 
 add_subdirectory(libhypergrace)

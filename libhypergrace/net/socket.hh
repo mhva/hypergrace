@@ -114,6 +114,9 @@ public:
      */
     int cloneFd();
 
+    void setData(void *data) { data_ = data; }
+    void *data() const { return data_; }
+
 public:
     Socket(const Socket &) = delete;
 
@@ -148,6 +151,8 @@ private:
 
     std::string pendingData_;
     size_t pendingOffset_;
+
+    void *data_;
 };
 
 } /* namespace Net */

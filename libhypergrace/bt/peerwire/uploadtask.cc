@@ -46,7 +46,7 @@ UploadTask::UploadTask(TorrentBundle &bundle, std::shared_ptr<DiskIo> ioThread) 
 void UploadTask::registerPeer(PeerData *peer)
 {
     UploadState *uploadState = new UploadState();
-    uploadState->requestsInProcessing = 0;
+    uploadState->ioRequests = 0;
 
     peer->setData(PeerData::UploadTask, uploadState);
 }
@@ -54,7 +54,6 @@ void UploadTask::registerPeer(PeerData *peer)
 void UploadTask::unregisterPeer(PeerData *peer)
 {
     auto uploadState = peer->getData<UploadState>(PeerData::UploadTask);
-
     std::lock_guard<std::mutex> l(uploadState->anchor);
 
     std::for_each(
@@ -70,9 +69,11 @@ void UploadTask::notifyRequestEvent(
         unsigned int size)
 {
     auto uploadState = peer->getData<UploadState>(PeerData::UploadTask);
+    size_t totalRequests = uploadState->ioRequests + uploadState->assembledMessages.size() +
+        uploadState->sentMessages.size();
 
-    if (uploadState->requestsInProcessing < 20) {
-        ++uploadState->requestsInProcessing;
+    if (totalRequests < 20) {
+        ++uploadState->ioRequests;
 
         ioThread_->readBlock(
             bundle_, piece, offset, size,
@@ -102,26 +103,24 @@ void UploadTask::notifyCancelEvent(
     // clients should never request duplicate blocks from one peer.
     {
         auto messageIt = std::find_if(
-                uploadState->assembledMessages.begin(),
-                uploadState->assembledMessages.end(),
-                predicate
+            uploadState->assembledMessages.begin(),
+            uploadState->assembledMessages.end(),
+            predicate
         );
 
 
         if (messageIt != uploadState->assembledMessages.end()) {
-            PieceMessage *message = *messageIt;
-
+            delete *messageIt;
             uploadState->assembledMessages.erase(messageIt);
-            delete message;
             return;
         }
     }
 
     {
         auto messageIt = std::find_if(
-                uploadState->sentMessages.begin(),
-                uploadState->sentMessages.end(),
-                predicate
+            uploadState->sentMessages.begin(),
+            uploadState->sentMessages.end(),
+            predicate
         );
 
 
@@ -143,7 +142,7 @@ void UploadTask::uploadBlocks(PeerData *peer)
         PieceMessage *message = uploadState->assembledMessages.front();
 
         // FIXME: Catch the occurences when the message is 0. It's
-        // never supposed to be 0, but it crashed once.
+        // never supposed to be 0, but it crashed on me once.
         assert(message != 0);
 
         uploadState->assembledMessages.pop_front();
@@ -156,7 +155,6 @@ void UploadTask::uploadBlocks(PeerData *peer)
 void UploadTask::cancelUpload(PeerData *peer)
 {
     auto uploadState = peer->getData<UploadState>(PeerData::UploadTask);
-
     std::lock_guard<std::mutex> l(uploadState->anchor);
 
     std::for_each(
@@ -168,12 +166,6 @@ void UploadTask::cancelUpload(PeerData *peer)
         uploadState->sentMessages.begin(), uploadState->sentMessages.end(),
         [](PieceMessage *p) { p->discard(); }
     );
-
-    // Update the number of requests in processing accordingly. We
-    // cannot just reset it to 0 because there might be some requests
-    // that are being processed by the I/O thread.
-    uploadState->requestsInProcessing -=
-        uploadState->assembledMessages.size() + uploadState->sentMessages.size();
 
     uploadState->assembledMessages.clear();
     uploadState->sentMessages.clear();
@@ -190,7 +182,9 @@ void UploadTask::handleReadSuccess(
     message->onSent = Delegate::bind(&UploadTask::handleMessageSentEvent, this, uploadState);
 
     std::lock_guard<std::mutex> l(uploadState->anchor);
+
     uploadState->assembledMessages.push_back(message);
+    --uploadState->ioRequests;
 }
 
 void UploadTask::handleReadFailure(
@@ -198,23 +192,20 @@ void UploadTask::handleReadFailure(
         unsigned int piece,
         unsigned int offset)
 {
-    assert(uploadState->requestsInProcessing > 0);
+    assert(uploadState->ioRequests > 0);
 
     hWarning() << "Failed to read piece" << piece << "at offset" << offset << "from disk";
 
-    --uploadState->requestsInProcessing;
+    --uploadState->ioRequests;
 }
 
 void UploadTask::handleMessageSentEvent(std::shared_ptr<UploadState> uploadState)
 {
     std::lock_guard<std::mutex> l(uploadState->anchor);
 
-    // Send order is never violated thus it's safe to assume that the
-    // sent message would be in front.
+    // Sending order is never violated thus it's safe to assume that
+    // the sent message would be in front of the list.
     uploadState->sentMessages.pop_front();
-
-    assert(uploadState->requestsInProcessing > 0);
-    --uploadState->requestsInProcessing;
 }
 
 void UploadTask::execute()

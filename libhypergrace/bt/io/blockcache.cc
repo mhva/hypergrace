@@ -85,8 +85,8 @@ DiskIo::WriteList BlockCache::flushEverything()
         BlockList &blocks = (*pieceIt).second.blocks;
 
         std::transform(
-                blocks.begin(), blocks.end(), std::back_inserter(writeList),
-                [piece](Block &b) { return std::make_tuple(piece, b.first, b.second); }
+            blocks.begin(), blocks.end(), std::back_inserter(writeList),
+            [piece](Block &b) { return std::make_tuple(piece, b.first, b.second); }
         );
 
         blocks.clear();
@@ -115,10 +115,10 @@ BlockCache::CompletePieceList BlockCache::flushComplete()
         if ((*pieceIt).second.blocksHave == (*pieceIt).second.blockCount) {
             completePieces.resize(completePieces.size() + 1);
 
-            completePieces[completePieces.size() - 1].first = piece;
+            completePieces.back().first = piece;
 
             for (auto blockIt = blocks.begin(); blockIt != blocks.end(); ++blockIt) {
-                completePieces[completePieces.size() - 1].second.push_back(
+                completePieces.back().second.push_back(
                         std::make_tuple(piece, (*blockIt).first, (*blockIt).second));
 
                 load_ -= (*blockIt).second.size();
@@ -132,7 +132,7 @@ BlockCache::CompletePieceList BlockCache::flushComplete()
     }
 
     std::for_each(eraseList.begin(), eraseList.end(),
-            [&cache_](Cache::iterator &it) { cache_.erase(it); });
+            [this](Cache::iterator &it) { cache_.erase(it); });
 
     completeCount_ = 0;
 

@@ -64,7 +64,7 @@ private:
 private:
     struct UploadState : public PeerData::CustomData
     {
-        volatile size_t requestsInProcessing;
+        volatile size_t ioRequests;
         std::deque<PieceMessage *> assembledMessages;
         std::deque<PieceMessage *> sentMessages;
         std::mutex anchor;

@@ -75,6 +75,7 @@ private:
     class HolderBase
     {
     public:
+        virtual ~HolderBase() = default;
         virtual HolderBase *copy() const = 0;
         virtual const std::type_info &type() const = 0;
     };
@@ -83,6 +84,8 @@ private:
     class Holder : public HolderBase
     {
     public:
+        virtual ~Holder() = default;
+
         Holder(const ValueType &h) :
             holdee(h)
         {
@@ -111,7 +114,7 @@ private:
                    .append("' to the '").append(typeName(to)).append("'");
         }
 
-        ~BadCastException() throw()
+        virtual ~BadCastException() throw()
         {
         }
 

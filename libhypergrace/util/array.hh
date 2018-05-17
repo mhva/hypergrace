@@ -23,6 +23,7 @@
 
 #include <array>
 #include <cstdlib>
+#include <cstring>
 #include <stdexcept>
 #include <string>
 

@@ -18,25 +18,3 @@
    Fifth Floor, Boston, MA 02110-1301, USA.
 */
 
-#ifndef NET_TCPCONNECTION_HH_
-#define NET_TCPCONNECTION_HH_
-
-#include <string>
-#include <net/socket.hh>
-
-namespace Hypergrace {
-namespace Net {
-
-class TcpSocket : public Socket
-{
-public:
-    TcpSocket(int, const HostAddress &);
-
-    ssize_t send(const char *, size_t);
-    ssize_t receive(std::string &, size_t);
-};
-
-} /* namespace Net */
-} /* namespace Hypergrace */
-
-#endif /* NET_TCPCONNECTION_HH_ */

@@ -119,7 +119,7 @@ void InterestTask::reconsiderInterest()
 
         if (interestState->piecesWanted > 0 && !peer->weAreInterested())
             peer->socket().send(new InterestedMessage());
-        else if (interestState->piecesWanted == 0 && peer->weAreInterested());
+        else if (interestState->piecesWanted == 0 && peer->weAreInterested())
             peer->socket().send(new NotInterestedMessage());
     }
 }
